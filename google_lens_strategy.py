@@ -93,7 +93,9 @@ class GoogleLensStrategy(ImageSearchStrategy):
 
         # 所有 Key 都失败
         if last_exception:
-            logger.error(f"[GoogleLens] 所有 API Key 均失败，最后错误: {last_exception}")
+            logger.error(
+                f"[GoogleLens] 所有 API Key 均失败，最后错误: {last_exception}"
+            )
         else:
             logger.error("[GoogleLens] 所有 API Key 已耗尽")
         return []
