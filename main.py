@@ -370,10 +370,11 @@ class ImgExplorationPlugin(Star):
             )
 
         # 根据模式构建不同的指令
+        result_count = len(result.items)
         if silent_mode:
             instruction = (
-                "搜索结果如下，请向用户展示：\n"
-                "找到 X 个结果：\n"
+                f"搜索结果如下，请向用户展示：\n"
+                f"找到 {result_count} 个结果：\n"
                 "1. 标题 - 来源: xxx, 相似度: xx%\n"
                 "   链接: URL\n"
                 "2. ...\n"
@@ -382,8 +383,8 @@ class ImgExplorationPlugin(Star):
             )
         else:
             instruction = (
-                "搜索结果已以图片消息形式发送给用户。你仍需要向用户说明搜索结果：\n"
-                "找到 X 个结果：\n"
+                f"搜索结果已以图片消息形式发送给用户。你仍需要向用户说明搜索结果：\n"
+                f"找到 {result_count} 个结果：\n"
                 "1. 标题 - 来源: xxx, 相似度: xx%\n"
                 "   链接: URL\n"
                 "2. ...\n"
