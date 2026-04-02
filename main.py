@@ -64,10 +64,22 @@ class ImgExplorationPlugin(Star):
 
     @staticmethod
     def _config_to_dict(config: AstrBotConfig) -> dict:
-        """将 AstrBotConfig 转换为普通 dict."""
+        """将 AstrBotConfig 转换为普通 dict.
+
+        AstrBotConfig 可能是 dict 子类或具有 __iter__ 的映射对象。
+        """
         if isinstance(config, dict):
             return dict(config)
-        return {}
+        # 尝试将其作为映射对象处理
+        try:
+            return dict(config.items())  # type: ignore[attr-defined]
+        except (AttributeError, TypeError):
+            # 最后尝试遍历键值
+            try:
+                return {k: config[k] for k in config}  # type: ignore[index, iter]
+            except Exception:
+                logger.warning("[ImgExploration] 无法解析配置对象，使用空配置")
+                return {}
 
     def _get_nested_config(self, *keys: str, default: Any = None) -> Any:
         """获取嵌套配置值.
@@ -634,7 +646,7 @@ class ImgExplorationPlugin(Star):
                 b64 = base64.b64encode(item.thumbnail_bytes).decode("ascii")
                 chain.append(Image(file=f"base64://{b64}"))
             elif item.thumbnail:
-                chain.append(Image(url=item.thumbnail))
+                chain.append(Image(file=item.thumbnail))
 
             # 链接
             chain.append(Plain(f"\n链接: {item.url}\n"))

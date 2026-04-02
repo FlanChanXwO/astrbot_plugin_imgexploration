@@ -166,7 +166,8 @@
 1. 用 **Chrome 浏览器**访问 https://ascii2d.net
 2. 通过 Cloudflare 验证
 3. 打开开发者工具 (F12) → Application → Cookies
-4. 复制 `_session_id` 和 `cf_clearance` 的值
+4. 复制 `_session_id` Cookie 的值，填入配置项 `ascii2d_session_id`
+5. 复制 `cf_clearance` Cookie 的值，填入配置项 `ascii2d_cf_clearance`
 
 **重要：** Ascii2d 需要使用代理访问，确保获取 Cookie 和服务器请求使用相同的代理 IP。
 
@@ -191,7 +192,7 @@
 解决：
 - 使用 Chrome 浏览器获取 Cookie
 - 配置代理，确保 IP 一致
-- 正确填写 `cf_clearance` 和 `session_id`
+- 正确填写 `ascii2d_cf_clearance` 和 `ascii2d_session_id` 配置项
 
 ### 2. LLM 不调用工具
 
