@@ -33,6 +33,7 @@ from .utils import (
     get_bot_api,
     get_http_image_url,
     is_aiocqhttp_platform,
+    set_allow_image_upload,
     set_proxy_url,
     set_user_agent,
 )
@@ -96,6 +97,8 @@ class ImgExplorationPlugin(Star):
         set_proxy_url(proxy_url)
         user_agent = network_config.get("user_agent", "")
         set_user_agent(user_agent)
+        allow_image_upload = network_config.get("allow_image_upload", True)
+        set_allow_image_upload(allow_image_upload)
 
         # 初始化图片上下文管理器
         ai_behavior = self._get_nested_config("ai_behavior", default={})

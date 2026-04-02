@@ -54,7 +54,7 @@
   "network": {
     "description": "网络配置",
     "type": "object",
-    "hint": "配置网络代理、User-Agent 等选项",
+    "hint": "配置网络代理、User-Agent、图床上传等选项",
     "items": {
       "proxy_url": {
         "type": "string",
@@ -67,6 +67,12 @@
         "description": "User-Agent",
         "hint": "HTTP 请求时使用的 User-Agent。留空使用默认值 (Chrome 120)。建议与获取 Cookie 时使用的浏览器保持一致。",
         "default": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
+      "allow_image_upload": {
+        "type": "bool",
+        "description": "允许上传图片到第三方图床",
+        "hint": "当搜图引擎需要 HTTP URL 时，本地图片/base64 图片会被上传到 Catbox 图床。关闭后仅支持 HTTP URL 图片搜图。请参阅 README 了解隐私影响。",
+        "default": true
       }
     }
   },

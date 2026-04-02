@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import urllib.parse
 
 import aiohttp
@@ -16,7 +17,10 @@ from astrbot.api import logger
 from .constant import HTTP_TIMEOUT_SECONDS, SERPAPI_BASE_URL
 from .models import SearchResultItem
 from .strategy import ImageSearchStrategy
-from .utils import _get_aiohttp_session, download_bytes, get_proxy_url
+from .utils import _get_aiohttp_session, download_bytes_batch, get_proxy_url
+
+# 额度缓存 TTL（秒）
+QUOTA_CACHE_TTL = 60
 
 
 class GoogleLensStrategy(ImageSearchStrategy):
@@ -35,6 +39,8 @@ class GoogleLensStrategy(ImageSearchStrategy):
         self.api_keys = api_keys or []
         self._current_key_index = 0
         self._key_lock = asyncio.Lock()
+        # 额度缓存: {api_key: (searches_left, timestamp)}
+        self._quota_cache: dict[str, tuple[int, float]] = {}
 
     def get_service_name(self) -> str:
         return "Google Lens"
@@ -57,8 +63,8 @@ class GoogleLensStrategy(ImageSearchStrategy):
             return []
 
         try:
-            # 选择可用的 API Key
-            api_key = await self._select_viable_key()
+            # 选择可用的 API Key（乐观选择，不预先检查额度）
+            api_key = await self._select_key_optimistically()
             if not api_key:
                 logger.error("[GoogleLens] 所有 API Key 已耗尽")
                 return []
@@ -81,14 +87,30 @@ class GoogleLensStrategy(ImageSearchStrategy):
 
             async with session.get(url, timeout=timeout, proxy=proxy) as resp:
                 if resp.status != 200:
+                    # 处理额度耗尽错误
+                    if resp.status == 401 or resp.status == 403:
+                        await self._mark_key_exhausted(api_key)
+                        logger.warning(f"[GoogleLens] Key ...{api_key[-4:]} 额度已耗尽")
+                        return []
                     logger.error(f"[GoogleLens] API 返回错误: HTTP {resp.status}")
                     return []
 
                 text = await resp.text()
                 data = json.loads(text)
 
+            # 检查响应中的错误
+            if "error" in data:
+                error_msg = data.get("error", "")
+                if "API key" in error_msg or "exceeded" in error_msg.lower():
+                    await self._mark_key_exhausted(api_key)
+                    logger.warning(f"[GoogleLens] Key ...{api_key[-4:]} 额度已耗尽: {error_msg}")
+                    return []
+                logger.error(f"[GoogleLens] SerpAPI 错误: {error_msg}")
+                return []
+
             # 解析结果
             results = []
+            thumbnail_urls = []
             if "visual_matches" in data:
                 matches = data["visual_matches"]
                 limit = min(len(matches), 8)  # 最多 8 条结果
@@ -104,26 +126,28 @@ class GoogleLensStrategy(ImageSearchStrategy):
                         if not title or not link:
                             continue
 
-                        # 下载缩略图
-                        thumbnail_bytes = await download_bytes(thumbnail)
-
                         results.append(
                             SearchResultItem(
                                 title=title,
                                 url=link,
                                 thumbnail=thumbnail,
-                                thumbnail_bytes=thumbnail_bytes,
+                                thumbnail_bytes=None,  # 先不下载，后面并行下载
                                 source="Google Lens",
                                 similarity=None,
                                 description=source,
                                 domain=None,
                             )
                         )
+                        thumbnail_urls.append(thumbnail)
                     except Exception as e:
                         logger.warning(f"[GoogleLens] 解析结果项失败: {e}")
 
-            elif "error" in data:
-                logger.error(f"[GoogleLens] SerpAPI 错误: {data['error']}")
+            # 并行下载所有缩略图
+            if results:
+                thumbnail_bytes_list = await download_bytes_batch(thumbnail_urls)
+                for idx, item in enumerate(results):
+                    if idx < len(thumbnail_bytes_list):
+                        item.thumbnail_bytes = thumbnail_bytes_list[idx]
 
             logger.info(f"[GoogleLens] 搜索完成，获取 {len(results)} 条结果")
             return results
@@ -132,10 +156,11 @@ class GoogleLensStrategy(ImageSearchStrategy):
             logger.error(f"[GoogleLens] 搜索异常: {e}")
             return []
 
-    async def _select_viable_key(self) -> str | None:
-        """选择有余额的 API Key.
+    async def _select_key_optimistically(self) -> str | None:
+        """乐观选择 API Key，不预先检查额度.
 
-        实现负载均衡和余额检查。
+        使用轮询方式选择 Key，额度错误在实际请求时处理。
+        使用缓存避免短时间内重复检查已知耗尽的 Key。
 
         Returns:
             可用的 API Key，如果没有则返回 None
@@ -144,23 +169,44 @@ class GoogleLensStrategy(ImageSearchStrategy):
             return None
 
         async with self._key_lock:
+            # 清理过期的缓存
+            now = time.time()
+            expired_keys = [
+                k for k, (_, ts) in self._quota_cache.items()
+                if now - ts > QUOTA_CACHE_TTL
+            ]
+            for k in expired_keys:
+                del self._quota_cache[k]
+
             start_idx = self._current_key_index % len(self.api_keys)
 
             for i in range(len(self.api_keys)):
                 idx = (start_idx + i) % len(self.api_keys)
                 key = self.api_keys[idx]
 
-                # 检查余额
-                searches_left = await self._check_quota(key)
+                # 检查缓存中是否有额度信息
+                cached = self._quota_cache.get(key)
+                if cached:
+                    searches_left, _ = cached
+                    if searches_left <= 0:
+                        continue  # 缓存显示已耗尽，跳过
 
-                if searches_left > 0:
-                    self._current_key_index = idx
-                    return key
+                self._current_key_index = idx
+                return key
 
             return None
 
-    @staticmethod
-    async def _check_quota(api_key: str) -> int:
+    async def _mark_key_exhausted(self, api_key: str) -> None:
+        """标记 API Key 已耗尽.
+
+        Args:
+            api_key: 已耗尽的 API Key
+        """
+        async with self._key_lock:
+            self._quota_cache[api_key] = (0, time.time())
+            logger.debug(f"[GoogleLens] 已标记 Key ...{api_key[-4:]} 为耗尽状态")
+
+    async def _check_quota(self, api_key: str) -> int:
         """检查 SerpAPI Key 的剩余搜索次数.
 
         Args:
@@ -180,7 +226,10 @@ class GoogleLensStrategy(ImageSearchStrategy):
                 if resp.status == 200:
                     text = await resp.text()
                     data = json.loads(text)
-                    return data.get("total_searches_left", 0)
+                    searches_left = data.get("total_searches_left", 0)
+                    # 更新缓存
+                    self._quota_cache[api_key] = (searches_left, time.time())
+                    return searches_left
 
         except Exception as e:
             logger.debug(f"[GoogleLens] 检查 Key ...{api_key[-4:]} 余额失败: {e}")

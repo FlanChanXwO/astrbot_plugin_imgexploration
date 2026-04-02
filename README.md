@@ -91,6 +91,28 @@
 |--------|------|------|--------|
 | `proxy_url` | 字符串 | 代理服务器 URL | 空 |
 | `user_agent` | 字符串 | User-Agent | Chrome 120 |
+| `allow_image_upload` | 布尔值 | 允许上传图片到第三方图床 | `true` |
+
+---
+
+## ⚠️ 隐私说明
+
+### 图床上传
+
+当搜图引擎需要 HTTP URL 时（如 SauceNAO、Google Lens），如果用户发送的是本地文件、`file://` 路径或 `base64` 图片，插件会将图片上传到 **Catbox (catbox.moe)** 第三方图床以获取公开可访问的 URL。
+
+**这意味着：**
+- 图片内容会暴露给 Catbox 第三方服务
+- 上传后的图片 URL 可能被他人访问
+- Catbox 服务条款请参考：https://catbox.moe
+
+**如何关闭：**
+在配置中设置 `allow_image_upload = false`，此时插件仅支持 HTTP URL 图片搜图，本地图片/base64 图片将被拒绝。
+
+**建议：**
+- 对隐私敏感的场景，关闭此功能
+- 仅使用 HTTP URL 图片进行搜图
+- 或自行搭建私有图床并修改代码
 
 ---
 

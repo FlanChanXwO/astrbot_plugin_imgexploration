@@ -30,6 +30,8 @@ _aiohttp_session_lock = asyncio.Lock()
 _proxy_url: str | None = None
 # 全局 User-Agent 设置
 _user_agent: str | None = None
+# 是否允许上传图片到第三方图床
+_allow_image_upload: bool = True
 
 
 def set_proxy_url(proxy_url: str | None) -> None:
@@ -82,8 +84,33 @@ def get_user_agent() -> str:
     return DEFAULT_USER_AGENT
 
 
+def set_allow_image_upload(allow: bool) -> None:
+    """设置是否允许上传图片到第三方图床.
+
+    Args:
+        allow: True 允许上传，False 禁止上传
+    """
+    global _allow_image_upload
+    _allow_image_upload = allow
+    status = "允许" if allow else "禁止"
+    logger.info(f"[ImgExploration] 已设置图床上传策略: {status}")
+
+
+def is_image_upload_allowed() -> bool:
+    """检查是否允许上传图片到第三方图床.
+
+    Returns:
+        True 如果允许上传
+    """
+    return _allow_image_upload
+
+
 async def _get_aiohttp_session() -> aiohttp.ClientSession:
     """获取全局共享的 aiohttp ClientSession.
+
+    注意：
+        代理配置通过每次请求时传入 `proxy=get_proxy_url()` 来控制，
+        因此会话本身不配置代理连接器。
 
     Returns:
         全局共享的 ClientSession 实例
@@ -95,11 +122,8 @@ async def _get_aiohttp_session() -> aiohttp.ClientSession:
 
     async with _aiohttp_session_lock:
         if _aiohttp_session is None or _aiohttp_session.closed:
-            connector = None
-            if _proxy_url:
-                # 使用代理连接器
-                connector = aiohttp.TCPConnector()
-            _aiohttp_session = aiohttp.ClientSession(connector=connector)
+            # 不使用自定义 connector，代理由各请求通过 `proxy` 参数控制
+            _aiohttp_session = aiohttp.ClientSession()
         return _aiohttp_session
 
 
@@ -351,6 +375,21 @@ def get_bot_api(event: Any) -> Any | None:
     return getattr(event, "bot", None)
 
 
+def _read_file_bytes(file_path: str) -> bytes:
+    """读取本地文件字节数据（用于 to_thread 调用）.
+
+    使用上下文管理器确保文件句柄正确关闭。
+
+    Args:
+        file_path: 文件路径
+
+    Returns:
+        文件字节数据
+    """
+    with open(file_path, "rb") as f:
+        return f.read()
+
+
 async def read_image_bytes(source: str) -> bytes | None:
     r"""读取图片源并返回字节数据
 
@@ -382,7 +421,7 @@ async def read_image_bytes(source: str) -> bytes | None:
             file_path = file_path[1:]  # 去掉开头的 /
         try:
             if os.path.exists(file_path):
-                return await asyncio.to_thread(lambda: open(file_path, "rb").read())
+                return await asyncio.to_thread(_read_file_bytes, file_path)
         except Exception as e:
             logger.debug(f"[ImgExploration] 读取本地文件失败: {file_path}, 错误: {e}")
         return None
@@ -391,7 +430,7 @@ async def read_image_bytes(source: str) -> bytes | None:
     if re.match(r"^[A-Za-z]:[/\\]", source):
         try:
             if os.path.exists(source):
-                return await asyncio.to_thread(lambda: open(source, "rb").read())
+                return await asyncio.to_thread(_read_file_bytes, source)
         except Exception as e:
             logger.debug(f"[ImgExploration] 读取本地文件失败: {source}, 错误: {e}")
         return None
@@ -480,7 +519,12 @@ async def get_http_image_url(source: str) -> str | None:
     """将图片源转换为 HTTP URL.
 
     如果已经是 HTTP URL，直接返回。
-    如果是本地文件或 base64，上传到图床后返回 URL。
+    如果是本地文件或 base64，且允许图床上传，则上传后返回 URL。
+
+    注意：
+        本地图片/base64 图片会被上传到 Catbox (catbox.moe) 第三方图床。
+        这意味着图片内容会暴露给第三方服务。如果隐私敏感，请关闭
+        allow_image_upload 配置项，此时仅支持 HTTP URL 图片。
 
     Args:
         source: 图片源字符串
@@ -494,6 +538,14 @@ async def get_http_image_url(source: str) -> str | None:
     # 已经是 HTTP URL，直接返回
     if source.startswith(("http://", "https://")):
         return source
+
+    # 检查是否允许上传到第三方图床
+    if not is_image_upload_allowed():
+        logger.warning(
+            "[ImgExploration] 图片上传已被禁用，仅支持 HTTP URL 图片搜图。"
+            "如需搜本地图片，请在配置中开启 allow_image_upload。"
+        )
+        return None
 
     # 其他格式：读取并上传
     image_bytes = await read_image_bytes(source)
