@@ -66,9 +66,13 @@ class ImgExplorationService:
             canonical_name = STRATEGY_ALIAS_MAP.get(name_lower, name_lower)
             # 查找策略
             strategy = self._strategy_map.get(canonical_name.lower())
-            if strategy and strategy not in resolved:
-                resolved.append(strategy)
+            if strategy:
+                # 已找到策略，避免重复添加
+                if strategy not in resolved:
+                    resolved.append(strategy)
+                # 如果是重复输入，则忽略，不计入 not_found
             else:
+                # 未找到对应策略，记录到 not_found 并打印日志
                 not_found.append(name)
                 logger.warning(f"[ImgExploration] 未找到策略 '{name}'")
 
