@@ -32,10 +32,21 @@ _allow_image_upload: bool = True
 _allow_local_file_access: bool = False
 
 # 敏感的 URL 查询参数名（日志中需要隐藏）
-SENSITIVE_QUERY_PARAMS = frozenset({
-    "api_key", "key", "token", "secret", "password", "pass",
-    "session_id", "sessionid", "auth", "access_token", "apikey",
-})
+SENSITIVE_QUERY_PARAMS = frozenset(
+    {
+        "api_key",
+        "key",
+        "token",
+        "secret",
+        "password",
+        "pass",
+        "session_id",
+        "sessionid",
+        "auth",
+        "access_token",
+        "apikey",
+    }
+)
 
 
 def _sanitize_url_for_logging(url: str) -> str:
@@ -247,7 +258,9 @@ async def download_bytes(
             if resp.status == 200:
                 return await resp.read()
     except Exception as e:
-        logger.debug(f"[ImgExploration] 下载失败: {_sanitize_url_for_logging(url)}, 错误: {e}")
+        logger.debug(
+            f"[ImgExploration] 下载失败: {_sanitize_url_for_logging(url)}, 错误: {e}"
+        )
 
     return None
 
