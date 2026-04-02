@@ -154,6 +154,18 @@ class GoogleLensStrategy(ImageSearchStrategy):
                 searches_left = await self._check_quota(key)
 
                 if searches_left > 0:
+                    # 明确知道还有余额的 Key，优先使用
+                    self._current_key_index = idx
+                    return key
+                elif searches_left == 0:
+                    # 余额为 0，跳过该 Key
+                    logger.info(f"[GoogleLens] Key ...{key[-4:]} 余额为 0，跳过此 Key")
+                    continue
+                else:
+                    # 查询失败（返回 -1），视为余额未知，作为降级策略仍允许使用
+                    logger.debug(
+                        f"[GoogleLens] 无法确定 Key ...{key[-4:]} 余额，作为降级策略仍尝试使用该 Key"
+                    )
                     self._current_key_index = idx
                     return key
 
