@@ -203,7 +203,8 @@ class GoogleLensStrategy(ImageSearchStrategy):
             # 清理过期的缓存
             now = time.time()
             expired_keys = [
-                k for k, (_, ts) in self._quota_cache.items()
+                k
+                for k, (_, ts) in self._quota_cache.items()
                 if now - ts > QUOTA_CACHE_TTL
             ]
             for k in expired_keys:
