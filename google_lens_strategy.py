@@ -72,6 +72,7 @@ class GoogleLensStrategy(ImageSearchStrategy):
             return []
 
         # 尝试所有可用的 API Key
+        last_exception: Exception | None = None
         for attempt in range(len(self.api_keys)):
             try:
                 return await self._search_with_key(image_url)
@@ -83,10 +84,18 @@ class GoogleLensStrategy(ImageSearchStrategy):
                 # 继续尝试下一个 key
                 continue
             except Exception as e:
-                logger.error(f"[GoogleLens] 搜索异常: {e}")
-                return []
+                # 记录异常但继续尝试其他 key
+                logger.warning(
+                    f"[GoogleLens] Key 尝试失败 (尝试 {attempt + 1}/{len(self.api_keys)}): {e}"
+                )
+                last_exception = e
+                continue
 
-        logger.error("[GoogleLens] 所有 API Key 已耗尽")
+        # 所有 Key 都失败
+        if last_exception:
+            logger.error(f"[GoogleLens] 所有 API Key 均失败，最后错误: {last_exception}")
+        else:
+            logger.error("[GoogleLens] 所有 API Key 已耗尽")
         return []
 
     async def _search_with_key(self, image_url: str) -> list[SearchResultItem]:
@@ -239,6 +248,14 @@ class GoogleLensStrategy(ImageSearchStrategy):
 
     async def _check_quota(self, api_key: str) -> int:
         """检查 SerpAPI Key 的剩余搜索次数.
+
+        通过 https://serpapi.com/account API 获取额度信息。
+        返回的值会缓存到 _quota_cache 中，供 _select_key_optimistically 使用。
+
+        注意：当前搜索流程采用乐观策略，不会预先调用此方法。
+        此方法主要用于：
+        - 手动检查额度
+        - 未来可能的定期额度预热
 
         Args:
             api_key: API Key

@@ -446,8 +446,9 @@ class ImgExplorationPlugin(Star):
 
         # 解析命令参数
         message_str = event.message_str.strip()
-        # 移除 "搜图" 前缀
-        args_str = message_str[2:].strip() if len(message_str) > 2 else ""
+        # 使用空格分割，移除命令本身，获取剩余参数
+        parts = message_str.split(maxsplit=1)
+        args_str = parts[1] if len(parts) > 1 else ""
 
         # 解析策略参数
         strategy_names = None
