@@ -103,7 +103,9 @@ class GoogleLensStrategy(ImageSearchStrategy):
                 error_msg = data.get("error", "")
                 if "API key" in error_msg or "exceeded" in error_msg.lower():
                     await self._mark_key_exhausted(api_key)
-                    logger.warning(f"[GoogleLens] Key ...{api_key[-4:]} 额度已耗尽: {error_msg}")
+                    logger.warning(
+                        f"[GoogleLens] Key ...{api_key[-4:]} 额度已耗尽: {error_msg}"
+                    )
                     return []
                 logger.error(f"[GoogleLens] SerpAPI 错误: {error_msg}")
                 return []
@@ -172,7 +174,8 @@ class GoogleLensStrategy(ImageSearchStrategy):
             # 清理过期的缓存
             now = time.time()
             expired_keys = [
-                k for k, (_, ts) in self._quota_cache.items()
+                k
+                for k, (_, ts) in self._quota_cache.items()
                 if now - ts > QUOTA_CACHE_TTL
             ]
             for k in expired_keys:
