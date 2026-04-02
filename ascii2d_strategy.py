@@ -30,7 +30,9 @@ class Ascii2dStrategy(ImageSearchStrategy):
     # 模拟 Chrome 浏览器 (curl_cffi 支持的稳定版本)
     IMPERSONATE_BROWSER = "chrome120"
 
-    def __init__(self, session_id: str | None = None, cf_clearance: str | None = None) -> None:
+    def __init__(
+        self, session_id: str | None = None, cf_clearance: str | None = None
+    ) -> None:
         """初始化 Ascii2d 策略.
 
         Args:
@@ -163,8 +165,12 @@ class Ascii2dStrategy(ImageSearchStrategy):
                 )
 
                 if response.status_code != 200:
-                    logger.warning(f"[Ascii2d] 获取主页失败: HTTP {response.status_code}")
-                    logger.debug(f"[Ascii2d] 响应内容: {response.text[:500] if response.text else 'empty'}")
+                    logger.warning(
+                        f"[Ascii2d] 获取主页失败: HTTP {response.status_code}"
+                    )
+                    logger.debug(
+                        f"[Ascii2d] 响应内容: {response.text[:500] if response.text else 'empty'}"
+                    )
                     return None
 
                 html = response.text
@@ -188,7 +194,9 @@ class Ascii2dStrategy(ImageSearchStrategy):
                 logger.debug("[Ascii2d] 成功获取 authenticity_token")
                 return match.group(1)
 
-        logger.warning("[Ascii2d] 未找到 authenticity_token，可能网页结构已变化或 Session ID 无效")
+        logger.warning(
+            "[Ascii2d] 未找到 authenticity_token，可能网页结构已变化或 Session ID 无效"
+        )
         logger.debug(f"[Ascii2d] HTML 片段: {html[:500] if html else 'empty'}")
         return None
 
@@ -212,12 +220,14 @@ class Ascii2dStrategy(ImageSearchStrategy):
         }
 
         # 手动构建表单数据
-        form_data = urllib.parse.urlencode({
-            "utf8": "✓",
-            "authenticity_token": token,
-            "uri": image_url,
-            "search": "",
-        })
+        form_data = urllib.parse.urlencode(
+            {
+                "utf8": "✓",
+                "authenticity_token": token,
+                "uri": image_url,
+                "search": "",
+            }
+        )
 
         try:
             async with AsyncSession(
@@ -243,7 +253,9 @@ class Ascii2dStrategy(ImageSearchStrategy):
                     return final_url
 
                 logger.warning(f"[Ascii2d] POST 失败: HTTP {response.status_code}")
-                logger.debug(f"[Ascii2d] POST 响应: {response.text[:500] if response.text else 'empty'}")
+                logger.debug(
+                    f"[Ascii2d] POST 响应: {response.text[:500] if response.text else 'empty'}"
+                )
                 return None
 
         except Exception as e:
@@ -288,7 +300,9 @@ class Ascii2dStrategy(ImageSearchStrategy):
                 )
 
                 if response.status_code != 200:
-                    logger.warning(f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}")
+                    logger.warning(
+                        f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}"
+                    )
                     return []
 
                 html = response.text

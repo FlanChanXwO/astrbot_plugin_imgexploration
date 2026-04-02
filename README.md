@@ -41,7 +41,7 @@
    ```
 2. 安装依赖：
    ```bash
-   pip install curl_cffi
+   pip install -r requirements.txt
    ```
 3. 重启 AstrBot 或重载插件
 

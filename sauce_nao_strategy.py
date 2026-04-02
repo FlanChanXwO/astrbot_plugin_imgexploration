@@ -74,7 +74,11 @@ class SauceNaoStrategy(ImageSearchStrategy):
             timeout = aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)
             proxy = get_proxy_url()
             async with session.get(
-                SAUCENAO_BASE_URL, params=params, headers=headers, timeout=timeout, proxy=proxy
+                SAUCENAO_BASE_URL,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+                proxy=proxy,
             ) as resp:
                 if resp.status != 200:
                     logger.error(f"[SauceNAO] API 请求失败: HTTP {resp.status}")

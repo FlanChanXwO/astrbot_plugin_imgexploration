@@ -11,14 +11,10 @@ HTTP_TIMEOUT_SECONDS = 30
 IMAGE_DOWNLOAD_TIMEOUT = 20
 
 # 默认 User-Agent (与 curl_cffi impersonate chrome120 保持一致)
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 # 模拟浏览器的完整请求头
-BROWSER_HEADERS = {
-    "User-Agent": DEFAULT_USER_AGENT
-}
+BROWSER_HEADERS = {"User-Agent": DEFAULT_USER_AGENT}
 
 # ==============================================================================
 # LLM 工具名称
