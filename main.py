@@ -34,6 +34,7 @@ from .utils import (
     get_http_image_url,
     is_aiocqhttp_platform,
     set_allow_image_upload,
+    set_allow_local_file_access,
     set_proxy_url,
     set_user_agent,
 )
@@ -111,6 +112,8 @@ class ImgExplorationPlugin(Star):
         set_user_agent(user_agent)
         allow_image_upload = network_config.get("allow_image_upload", True)
         set_allow_image_upload(allow_image_upload)
+        allow_local_file_access = network_config.get("allow_local_file_access", False)
+        set_allow_local_file_access(allow_local_file_access)
 
         # 初始化图片上下文管理器
         ai_behavior = self._get_nested_config("ai_behavior", default={})
@@ -200,15 +203,6 @@ class ImgExplorationPlugin(Star):
         except Exception as e:
             logger.error(f"[ImgExploration] 移除 LLM 工具失败: {e}")
 
-    def _check_ai_allowed(self) -> bool:
-        """检查是否允许 AI 执行搜图.
-
-        Returns:
-            True 如果允许
-        """
-        ai_behavior = self._get_nested_config("ai_behavior", default={})
-        return ai_behavior.get("allow_ai_search_image", True)
-
     def _is_llm_tool_silent_mode(self) -> bool:
         """检查 LLM 工具是否为静默模式.
 
@@ -276,12 +270,6 @@ class ImgExplorationPlugin(Star):
         Returns:
             JSON result with search results. You MUST present the results to the user with URLs and titles.
         """
-        # 检查是否允许 AI 执行搜图
-        if not self._check_ai_allowed():
-            return json.dumps(
-                {"success": False, "error": "AI 搜图功能已被禁用"}, ensure_ascii=False
-            )
-
         # 检查是否有可用策略
         if not self.strategies:
             return json.dumps(

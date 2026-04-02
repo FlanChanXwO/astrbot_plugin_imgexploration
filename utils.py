@@ -32,6 +32,60 @@ _proxy_url: str | None = None
 _user_agent: str | None = None
 # 是否允许上传图片到第三方图床
 _allow_image_upload: bool = True
+# 是否允许读取本地文件
+_allow_local_file_access: bool = False
+
+# 敏感的 URL 查询参数名（日志中需要隐藏）
+SENSITIVE_QUERY_PARAMS = frozenset({
+    "api_key", "key", "token", "secret", "password", "pass",
+    "session_id", "sessionid", "auth", "access_token", "apikey",
+})
+
+
+def _sanitize_url_for_logging(url: str) -> str:
+    """清理 URL 中的敏感信息，用于日志输出.
+
+    隐藏敏感查询参数的值，只显示参数名。
+
+    Args:
+        url: 原始 URL
+
+    Returns:
+        清理后的 URL，适合日志输出
+    """
+    if not url:
+        return url
+
+    try:
+        # 分离 URL 的各个部分
+        if "?" not in url:
+            return url
+
+        base, query = url.split("?", 1)
+        if "#" in query:
+            query, fragment = query.split("#", 1)
+            fragment = "#" + fragment
+        else:
+            fragment = ""
+
+        # 处理查询参数
+        params = query.split("&")
+        sanitized_params = []
+        for param in params:
+            if "=" in param:
+                key, value = param.split("=", 1)
+                if key.lower() in SENSITIVE_QUERY_PARAMS:
+                    # 隐藏敏感参数值
+                    sanitized_params.append(f"{key}=***REDACTED***")
+                else:
+                    sanitized_params.append(param)
+            else:
+                sanitized_params.append(param)
+
+        return f"{base}?{'&'.join(sanitized_params)}{fragment}"
+    except Exception:
+        # 如果解析失败，返回一个安全的占位符
+        return "<URL removed for security>"
 
 
 def set_proxy_url(proxy_url: str | None) -> None:
@@ -109,6 +163,27 @@ def is_image_upload_allowed() -> bool:
     return _allow_image_upload
 
 
+def set_allow_local_file_access(allow: bool) -> None:
+    """设置是否允许读取本地文件.
+
+    Args:
+        allow: True 允许读取，False 禁止读取
+    """
+    global _allow_local_file_access
+    _allow_local_file_access = allow
+    status = "允许" if allow else "禁止"
+    logger.info(f"[ImgExploration] 已设置本地文件访问策略: {status}")
+
+
+def is_local_file_access_allowed() -> bool:
+    """检查是否允许读取本地文件.
+
+    Returns:
+        True 如果允许读取
+    """
+    return _allow_local_file_access
+
+
 async def _get_aiohttp_session() -> aiohttp.ClientSession:
     """获取全局共享的 aiohttp ClientSession.
 
@@ -176,7 +251,7 @@ async def download_bytes(
             if resp.status == 200:
                 return await resp.read()
     except Exception as e:
-        logger.debug(f"[ImgExploration] 下载失败: {url}, 错误: {e}")
+        logger.debug(f"[ImgExploration] 下载失败: {_sanitize_url_for_logging(url)}, 错误: {e}")
 
     return None
 
@@ -254,7 +329,7 @@ async def post_multipart(
             return resp.status, content
 
     except Exception as e:
-        logger.error(f"[ImgExploration] POST 请求失败: {url}, 错误: {e}")
+        logger.error(f"[ImgExploration] POST 请求失败: {_sanitize_url_for_logging(url)}, 错误: {e}")
         return 0, None
 
 
@@ -299,7 +374,7 @@ async def get_json(
             return resp.status, None
 
     except Exception as e:
-        logger.error(f"[ImgExploration] GET 请求失败: {url}, 错误: {e}")
+        logger.error(f"[ImgExploration] GET 请求失败: {_sanitize_url_for_logging(url)}, 错误: {e}")
         return 0, None
 
 
@@ -342,7 +417,7 @@ async def get_html(
             return resp.status, None
 
     except Exception as e:
-        logger.error(f"[ImgExploration] GET HTML 失败: {url}, 错误: {e}")
+        logger.error(f"[ImgExploration] GET HTML 失败: {_sanitize_url_for_logging(url)}, 错误: {e}")
         return 0, None
 
 
@@ -407,10 +482,14 @@ async def read_image_bytes(source: str) -> bytes | None:
 
     支持多种格式：
     - HTTP/HTTPS URL: 下载图片
-    - file:// 本地文件路径: 读取本地文件
-    - Windows 本地路径 (C:\path 或 D:/path): 读取本地文件
+    - file:// 本地文件路径: 读取本地文件（需要 allow_local_file_access）
+    - Windows 本地路径 (C:\path 或 D:/path): 读取本地文件（需要 allow_local_file_access）
     - base64:// 数据: 解码 base64
     - data:image/...;base64,... : 解码 base64 data URI
+
+    注意：
+        本地文件访问受 allow_local_file_access 配置控制。
+        出于安全考虑，默认禁用本地文件访问，以防止潜在的文件系统信息泄露。
 
     Args:
         source: 图片源字符串
@@ -425,26 +504,29 @@ async def read_image_bytes(source: str) -> bytes | None:
     if source.startswith(("http://", "https://")):
         return await download_bytes(source)
 
-    # file:// 本地文件
-    if source.startswith("file://"):
-        file_path = source[7:]  # 去掉 file:// 前缀
-        # 处理 Windows 路径 (file:///C:/...)
-        if file_path.startswith("/") and len(file_path) > 2 and file_path[2] == ":":
-            file_path = file_path[1:]  # 去掉开头的 /
+    # 本地文件访问 - 需要明确启用
+    if source.startswith("file://") or re.match(r"^[A-Za-z]:[/\\]", source):
+        if not is_local_file_access_allowed():
+            logger.warning(
+                "[ImgExploration] 本地文件访问已被禁用。"
+                "如需读取本地文件，请在配置中开启 allow_local_file_access。"
+            )
+            return None
+
+        # 解析文件路径
+        if source.startswith("file://"):
+            file_path = source[7:]  # 去掉 file:// 前缀
+            # 处理 Windows 路径 (file:///C:/...)
+            if file_path.startswith("/") and len(file_path) > 2 and file_path[2] == ":":
+                file_path = file_path[1:]  # 去掉开头的 /
+        else:
+            file_path = source
+
         try:
             if os.path.exists(file_path):
                 return await asyncio.to_thread(_read_file_bytes, file_path)
         except Exception as e:
-            logger.debug(f"[ImgExploration] 读取本地文件失败: {file_path}, 错误: {e}")
-        return None
-
-    # Windows 本地路径 (如 D:\path 或 C:/path)
-    if re.match(r"^[A-Za-z]:[/\\]", source):
-        try:
-            if os.path.exists(source):
-                return await asyncio.to_thread(_read_file_bytes, source)
-        except Exception as e:
-            logger.debug(f"[ImgExploration] 读取本地文件失败: {source}, 错误: {e}")
+            logger.debug(f"[ImgExploration] 读取本地文件失败: 错误: {e}")
         return None
 
     # base64:// 格式

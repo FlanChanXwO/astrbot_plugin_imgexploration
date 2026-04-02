@@ -4,12 +4,6 @@
     "type": "object",
     "hint": "配置 AI 搜图相关功能",
     "items": {
-      "allow_ai_search_image": {
-        "type": "bool",
-        "description": "允许 AI 执行搜图",
-        "hint": "开启后，AI 可以通过 search_image 工具帮助用户搜索图片。关闭则 AI 不会响应搜图请求。",
-        "default": true
-      },
       "image_context_isolation": {
         "type": "string",
         "description": "图片上下文隔离模式",
@@ -46,7 +40,7 @@
       "llm_tool_silent_mode": {
         "type": "bool",
         "description": "LLM 工具静默模式",
-        "hint": "开启后，LLM 调用搜图工具时不会自动发送消息，结果全部由 LLM 自己处理。适用于不支持 Markdown 的平台。",
+        "hint": "开启后，LLM 调用搜图工具时不会自动发送消息，结果全部由 LLM 自己处理。",
         "default": false
       }
     }
@@ -73,6 +67,12 @@
         "description": "允许上传图片到第三方图床",
         "hint": "当搜图引擎需要 HTTP URL 时，本地图片/base64 图片会被上传到 Catbox 图床。关闭后仅支持 HTTP URL 图片搜图。请参阅 README 了解隐私影响。",
         "default": true
+      },
+      "allow_local_file_access": {
+        "type": "bool",
+        "description": "允许读取本地文件",
+        "hint": "允许读取 file:// 路径或本地磁盘路径的图片。关闭后仅支持 HTTP URL 和 base64 数据，可防止潜在的文件系统信息泄露。",
+        "default": false
       }
     }
   },

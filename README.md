@@ -71,7 +71,6 @@
 
 | 配置项 | 类型 | 说明 | 默认值 |
 |--------|------|------|--------|
-| `allow_ai_search_image` | 布尔值 | 允许 AI 执行搜图 | `true` |
 | `image_context_isolation` | 字符串 | 图片上下文隔离模式（`session`/`global`） | `session` |
 | `max_images_per_session` | 整数 | 每会话最大图片数 | `20` |
 | `image_context_ttl_seconds` | 整数 | 图片上下文保留时长（秒），0 表示不过期 | `0` |
@@ -92,10 +91,22 @@
 | `proxy_url` | 字符串 | 代理服务器 URL | 空 |
 | `user_agent` | 字符串 | User-Agent | Chrome 120 |
 | `allow_image_upload` | 布尔值 | 允许上传图片到第三方图床 | `true` |
+| `allow_local_file_access` | 布尔值 | 允许读取本地文件 | `false` |
 
 ---
 
 ## ⚠️ 隐私说明
+
+### 本地文件访问
+
+出于安全考虑，插件默认 **禁止** 读取本地文件（`file://` 路径或磁盘路径如 `C:\path`）。
+
+**风险说明：**
+- 允许读取本地文件可能导致服务器上任意可访问文件被上传到第三方图床
+- 恶意用户可能利用此功能探测服务器文件结构
+
+**如何开启：**
+如确需使用本地文件搜图，在配置中设置 `allow_local_file_access = true`。建议仅在受信任的环境中使用。
 
 ### 图床上传
 
