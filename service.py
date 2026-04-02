@@ -43,7 +43,9 @@ class ImgExplorationService:
         """
         return [s.get_service_name() for s in self.strategies]
 
-    def resolve_strategy_names(self, names: list[str] | None) -> tuple[list[ImageSearchStrategy], list[str]]:
+    def resolve_strategy_names(
+        self, names: list[str] | None
+    ) -> tuple[list[ImageSearchStrategy], list[str]]:
         """解析策略名称别名，返回对应的策略实例.
 
         Args:
@@ -72,7 +74,9 @@ class ImgExplorationService:
 
         return resolved, not_found
 
-    async def explore(self, image_url: str, strategy_names: list[str] | None = None) -> ExplorationResult:
+    async def explore(
+        self, image_url: str, strategy_names: list[str] | None = None
+    ) -> ExplorationResult:
         """执行图片搜索.
 
         Args:

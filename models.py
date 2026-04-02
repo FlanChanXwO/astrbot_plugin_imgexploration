@@ -10,8 +10,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class SearchResultItem:
-    """单个搜索结果项.
-    """
+    """单个搜索结果项."""
 
     title: str
     url: str
@@ -38,7 +37,6 @@ class SearchResultItem:
 
 @dataclass
 class ExplorationResult:
-    """搜索结果集合.
-    """
+    """搜索结果集合."""
 
     items: list[SearchResultItem] = field(default_factory=list)

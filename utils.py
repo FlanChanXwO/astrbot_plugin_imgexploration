@@ -39,7 +39,11 @@ def set_proxy_url(proxy_url: str | None) -> None:
         proxy_url: 代理 URL，如 http://127.0.0.1:7890。None 或空字符串表示不使用代理。
     """
     global _proxy_url
-    if proxy_url and proxy_url.strip() and proxy_url.startswith(("http://", "https://")):
+    if (
+        proxy_url
+        and proxy_url.strip()
+        and proxy_url.startswith(("http://", "https://"))
+    ):
         _proxy_url = proxy_url.strip()
         logger.info(f"[ImgExploration] 已设置代理: {_proxy_url}")
     else:
@@ -259,7 +263,11 @@ async def get_json(
     try:
         session = await _get_aiohttp_session()
         async with session.get(
-            url, params=params, timeout=client_timeout, headers=default_headers, proxy=proxy
+            url,
+            params=params,
+            timeout=client_timeout,
+            headers=default_headers,
+            proxy=proxy,
         ) as resp:
             if resp.status == 200:
                 text = await resp.text()
@@ -298,7 +306,11 @@ async def get_html(
     try:
         session = await _get_aiohttp_session()
         async with session.get(
-            url, params=params, timeout=client_timeout, headers=default_headers, proxy=proxy
+            url,
+            params=params,
+            timeout=client_timeout,
+            headers=default_headers,
+            proxy=proxy,
         ) as resp:
             if resp.status == 200:
                 return resp.status, await resp.text()
@@ -469,7 +481,9 @@ async def upload_image(image_bytes: bytes) -> str | None:
                 logger.warning(f"[ImgExploration] Catbox 返回异常: {url}")
             else:
                 text = await resp.text()
-                logger.warning(f"[ImgExploration] Catbox 上传失败: HTTP {resp.status}, {text}")
+                logger.warning(
+                    f"[ImgExploration] Catbox 上传失败: HTTP {resp.status}, {text}"
+                )
     except Exception as e:
         logger.error(f"[ImgExploration] Catbox 上传异常: {e}")
 
