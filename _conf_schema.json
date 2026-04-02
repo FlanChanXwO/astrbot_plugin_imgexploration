@@ -65,7 +65,7 @@
       "allow_image_upload": {
         "type": "bool",
         "description": "允许上传图片到第三方图床",
-        "hint": "当搜图引擎需要 HTTP URL 时，本地图片/base64 图片会被上传到 Catbox 图床。关闭后仅支持 HTTP URL 图片搜图。请参阅 README 了解隐私影响。",
+        "hint": "当搜图引擎需要 HTTP URL 时，本地图片/base64 图片会被上传到 Catbox 图床。",
         "default": true
       },
       "allow_local_file_access": {
