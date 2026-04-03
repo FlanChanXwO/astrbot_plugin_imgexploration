@@ -192,9 +192,7 @@ class Ascii2dStrategy(ImageSearchStrategy):
             )
 
             if response.status_code != 200:
-                logger.warning(
-                    f"[Ascii2d] 获取主页失败: HTTP {response.status_code}"
-                )
+                logger.warning(f"[Ascii2d] 获取主页失败: HTTP {response.status_code}")
                 logger.debug(
                     f"[Ascii2d] 响应内容: {response.text[:500] if response.text else 'empty'}"
                 )
@@ -316,9 +314,7 @@ class Ascii2dStrategy(ImageSearchStrategy):
             )
 
             if response.status_code != 200:
-                logger.warning(
-                    f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}"
-                )
+                logger.warning(f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}")
                 return []
 
             html = response.text
