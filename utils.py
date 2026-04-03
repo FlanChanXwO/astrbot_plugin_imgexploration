@@ -333,6 +333,7 @@ async def read_image_bytes(source: str) -> bytes | None:
     - HTTP/HTTPS URL: 下载图片
     - file:// 本地文件路径: 读取本地文件（需要 allow_local_file_access）
     - Windows 本地路径 (C:\path 或 D:/path): 读取本地文件（需要 allow_local_file_access）
+    - POSIX 本地路径 (/home/user/xxx.png): 读取本地文件（需要 allow_local_file_access）
     - base64:// 数据: 解码 base64
     - data:image/...;base64,... : 解码 base64 data URI
 
@@ -354,7 +355,15 @@ async def read_image_bytes(source: str) -> bytes | None:
         return await download_bytes(source)
 
     # 本地文件访问 - 需要明确启用
-    if source.startswith("file://") or re.match(r"^[A-Za-z]:[/\\]", source):
+    # 支持:
+    #   - file:// 路径
+    #   - Windows 绝对路径 (C:\path 或 C:/path)
+    #   - POSIX 绝对路径 (/home/user/xxx.png)
+    if (
+        source.startswith("file://")
+        or re.match(r"^[A-Za-z]:[/\\]", source)
+        or source.startswith("/")
+    ):
         if not is_local_file_access_allowed():
             logger.warning(
                 "[ImgExploration] 本地文件访问已被禁用。"
