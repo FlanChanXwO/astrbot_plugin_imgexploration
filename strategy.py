@@ -36,3 +36,11 @@ class ImageSearchStrategy(ABC):
             搜索结果列表
         """
         pass
+
+    async def close(self) -> None:
+        """关闭策略并清理资源.
+
+        子类如有需要（如维护持久连接），应重写此方法。
+        默认实现不做任何操作。
+        """
+        pass

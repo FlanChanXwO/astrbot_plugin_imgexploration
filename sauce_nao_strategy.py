@@ -15,7 +15,7 @@ from astrbot.api import logger
 from .constant import HTTP_TIMEOUT_SECONDS, SAUCENAO_BASE_URL
 from .models import SearchResultItem
 from .strategy import ImageSearchStrategy
-from .utils import _get_aiohttp_session, get_proxy_url, get_user_agent
+from .utils import get_aiohttp_session, get_proxy_url, get_user_agent
 
 
 class SauceNaoStrategy(ImageSearchStrategy):
@@ -57,7 +57,7 @@ class SauceNaoStrategy(ImageSearchStrategy):
         results: list[SearchResultItem] = []
 
         try:
-            session = await _get_aiohttp_session()
+            session = await get_aiohttp_session()
 
             # 使用 URL 参数构建请求
             params = {

@@ -191,7 +191,7 @@ def is_local_file_access_allowed() -> bool:
     return _allow_local_file_access
 
 
-async def _get_aiohttp_session() -> aiohttp.ClientSession:
+async def get_aiohttp_session() -> aiohttp.ClientSession:
     """获取全局共享的 aiohttp ClientSession.
 
     注意：
@@ -251,7 +251,7 @@ async def download_bytes(
     proxy = get_proxy_url()
 
     try:
-        session = await _get_aiohttp_session()
+        session = await get_aiohttp_session()
         async with session.get(
             url, timeout=client_timeout, headers=default_headers, proxy=proxy
         ) as resp:
@@ -423,7 +423,7 @@ async def upload_image(image_bytes: bytes) -> str | None:
     proxy = get_proxy_url()
 
     try:
-        session = await _get_aiohttp_session()
+        session = await get_aiohttp_session()
         # 构建 multipart form data
         data = aiohttp.FormData()
         data.add_field("reqtype", "fileupload")

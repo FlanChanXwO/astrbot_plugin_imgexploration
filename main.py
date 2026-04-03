@@ -190,6 +190,9 @@ class ImgExplorationPlugin(Star):
         """插件卸载时清理资源."""
         # 注销 LLM 工具
         self._unregister_llm_tools()
+        # 关闭所有策略的资源
+        for strategy in self.strategies:
+            await strategy.close()
         # 关闭全局 aiohttp session
         await close_aiohttp_session()
 

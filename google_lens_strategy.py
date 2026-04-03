@@ -17,7 +17,7 @@ from astrbot.api import logger
 from .constant import HTTP_TIMEOUT_SECONDS, SERPAPI_BASE_URL
 from .models import SearchResultItem
 from .strategy import ImageSearchStrategy
-from .utils import _get_aiohttp_session, download_bytes_batch, get_proxy_url
+from .utils import get_aiohttp_session, download_bytes_batch, get_proxy_url
 
 # 额度缓存 TTL（秒）
 QUOTA_CACHE_TTL = 60
@@ -129,7 +129,7 @@ class GoogleLensStrategy(ImageSearchStrategy):
 
         url = f"{SERPAPI_BASE_URL}/search?{urllib.parse.urlencode(params)}"
 
-        session = await _get_aiohttp_session()
+        session = await get_aiohttp_session()
         timeout = aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)
         proxy = get_proxy_url()
 
@@ -248,41 +248,3 @@ class GoogleLensStrategy(ImageSearchStrategy):
         async with self._key_lock:
             self._quota_cache[api_key] = (0, time.time())
             logger.debug(f"[GoogleLens] 已标记 Key ...{api_key[-4:]} 为耗尽状态")
-
-    async def _check_quota(self, api_key: str) -> int:
-        """检查 SerpAPI Key 的剩余搜索次数.
-
-        通过 https://serpapi.com/account API 获取额度信息。
-        返回的值会缓存到 _quota_cache 中，供 _select_key_optimistically 使用。
-
-        注意：当前搜索流程采用乐观策略，不会预先调用此方法。
-        此方法主要用于：
-        - 手动检查额度
-        - 未来可能的定期额度预热
-
-        Args:
-            api_key: API Key
-
-        Returns:
-            剩余搜索次数，查询失败返回 -1
-        """
-        url = f"{SERPAPI_BASE_URL}/account?api_key={api_key}"
-
-        try:
-            session = await _get_aiohttp_session()
-            timeout = aiohttp.ClientTimeout(total=10)
-            proxy = get_proxy_url()
-
-            async with session.get(url, timeout=timeout, proxy=proxy) as resp:
-                if resp.status == 200:
-                    text = await resp.text()
-                    data = json.loads(text)
-                    searches_left = data.get("total_searches_left", 0)
-                    # 更新缓存
-                    self._quota_cache[api_key] = (searches_left, time.time())
-                    return searches_left
-
-        except Exception as e:
-            logger.debug(f"[GoogleLens] 检查 Key ...{api_key[-4:]} 余额失败: {e}")
-
-        return -1

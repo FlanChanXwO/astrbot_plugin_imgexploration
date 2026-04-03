@@ -41,6 +41,38 @@ class Ascii2dStrategy(ImageSearchStrategy):
         """
         self.session_id = session_id or ""
         self.cf_clearance = cf_clearance or ""
+        # 共享的 curl_cffi AsyncSession，避免重复创建连接
+        self._session: AsyncSession | None = None
+        self._session_lock = asyncio.Lock()
+
+    async def _get_session(self) -> AsyncSession:
+        """获取共享的 AsyncSession 实例.
+
+        懒初始化，首次调用时创建，后续复用。
+
+        Returns:
+            共享的 AsyncSession 实例
+        """
+        if self._session is not None:
+            return self._session
+
+        async with self._session_lock:
+            if self._session is None:
+                proxies = self._get_proxies()
+                self._session = AsyncSession(
+                    impersonate=self.IMPERSONATE_BROWSER,
+                    proxies=proxies,
+                    timeout=HTTP_TIMEOUT_SECONDS,
+                )
+            return self._session
+
+    async def close(self) -> None:
+        """关闭共享的 AsyncSession 并清理资源."""
+        async with self._session_lock:
+            if self._session is not None:
+                await self._session.close()
+                self._session = None
+                logger.debug("[Ascii2d] AsyncSession 已关闭")
 
     def _get_cookies(self) -> dict:
         """获取 Cookie 字典.
@@ -150,30 +182,25 @@ class Ascii2dStrategy(ImageSearchStrategy):
         Returns:
             token 字符串，失败返回 None
         """
-        proxies = self._get_proxies()
         cookies = self._get_cookies()
 
         try:
-            async with AsyncSession(
-                impersonate=self.IMPERSONATE_BROWSER,
-                proxies=proxies,
-                timeout=HTTP_TIMEOUT_SECONDS,
-            ) as session:
-                response = await session.get(
-                    ASCII2D_BASE_URL,
-                    cookies=cookies,
+            session = await self._get_session()
+            response = await session.get(
+                ASCII2D_BASE_URL,
+                cookies=cookies,
+            )
+
+            if response.status_code != 200:
+                logger.warning(
+                    f"[Ascii2d] 获取主页失败: HTTP {response.status_code}"
                 )
+                logger.debug(
+                    f"[Ascii2d] 响应内容: {response.text[:500] if response.text else 'empty'}"
+                )
+                return None
 
-                if response.status_code != 200:
-                    logger.warning(
-                        f"[Ascii2d] 获取主页失败: HTTP {response.status_code}"
-                    )
-                    logger.debug(
-                        f"[Ascii2d] 响应内容: {response.text[:500] if response.text else 'empty'}"
-                    )
-                    return None
-
-                html = response.text
+            html = response.text
 
         except Exception as e:
             logger.error(f"[Ascii2d] 获取主页异常: {e}")
@@ -210,7 +237,6 @@ class Ascii2dStrategy(ImageSearchStrategy):
         Returns:
             结果页 URL，失败返回 None
         """
-        proxies = self._get_proxies()
         cookies = self._get_cookies()
 
         headers = {
@@ -230,33 +256,29 @@ class Ascii2dStrategy(ImageSearchStrategy):
         )
 
         try:
-            async with AsyncSession(
-                impersonate=self.IMPERSONATE_BROWSER,
-                proxies=proxies,
-                timeout=HTTP_TIMEOUT_SECONDS,
-            ) as session:
-                response = await session.post(
-                    ASCII2D_SEARCH_URI_URL,
-                    data=form_data,
-                    cookies=cookies,
-                    headers=headers,
-                    allow_redirects=True,
-                )
+            session = await self._get_session()
+            response = await session.post(
+                ASCII2D_SEARCH_URI_URL,
+                data=form_data,
+                cookies=cookies,
+                headers=headers,
+                allow_redirects=True,
+            )
 
-                if response.status_code == 200:
-                    final_url = str(response.url)
-                    # 验证是否跳转到结果页
-                    if "/search/color/" in final_url or "/search/bovw/" in final_url:
-                        logger.info(f"[Ascii2d] 搜索成功，结果页: {final_url}")
-                        return final_url
-                    logger.warning(f"[Ascii2d] 重定向到非预期 URL: {final_url}")
+            if response.status_code == 200:
+                final_url = str(response.url)
+                # 验证是否跳转到结果页
+                if "/search/color/" in final_url or "/search/bovw/" in final_url:
+                    logger.info(f"[Ascii2d] 搜索成功，结果页: {final_url}")
                     return final_url
+                logger.warning(f"[Ascii2d] 重定向到非预期 URL: {final_url}")
+                return final_url
 
-                logger.warning(f"[Ascii2d] POST 失败: HTTP {response.status_code}")
-                logger.debug(
-                    f"[Ascii2d] POST 响应: {response.text[:500] if response.text else 'empty'}"
-                )
-                return None
+            logger.warning(f"[Ascii2d] POST 失败: HTTP {response.status_code}")
+            logger.debug(
+                f"[Ascii2d] POST 响应: {response.text[:500] if response.text else 'empty'}"
+            )
+            return None
 
         except Exception as e:
             logger.error(f"[Ascii2d] POST 请求异常: {e}")
@@ -282,30 +304,24 @@ class Ascii2dStrategy(ImageSearchStrategy):
         else:
             target_url = base_url
 
-        proxies = self._get_proxies()
         cookies = self._get_cookies()
-
         headers = {"Referer": ASCII2D_BASE_URL}
 
         try:
-            async with AsyncSession(
-                impersonate=self.IMPERSONATE_BROWSER,
-                proxies=proxies,
-                timeout=HTTP_TIMEOUT_SECONDS,
-            ) as session:
-                response = await session.get(
-                    target_url,
-                    cookies=cookies,
-                    headers=headers,
+            session = await self._get_session()
+            response = await session.get(
+                target_url,
+                cookies=cookies,
+                headers=headers,
+            )
+
+            if response.status_code != 200:
+                logger.warning(
+                    f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}"
                 )
+                return []
 
-                if response.status_code != 200:
-                    logger.warning(
-                        f"[Ascii2d] 获取结果页失败: HTTP {response.status_code}"
-                    )
-                    return []
-
-                html = response.text
+            html = response.text
 
         except Exception as e:
             logger.error(f"[Ascii2d] 获取结果页异常: {e}")
