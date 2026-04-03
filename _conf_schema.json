@@ -1,0 +1,156 @@
+{
+  "ai_behavior": {
+    "description": "AI 行为配置",
+    "type": "object",
+    "hint": "配置 AI 搜图相关功能",
+    "items": {
+      "image_context_isolation": {
+        "type": "string",
+        "description": "图片上下文隔离模式",
+        "hint": "session: 每个群/私聊独立存储图片；global: 所有会话共享图片。默认 session。",
+        "default": "session"
+      },
+      "max_images_per_session": {
+        "type": "int",
+        "description": "每会话最大图片数",
+        "hint": "每个会话最多保留多少张图片记录，超出后移除最早的。",
+        "default": 20,
+        "slider": {"min": 5, "max": 50, "step": 5}
+      },
+      "image_context_ttl_seconds": {
+        "type": "int",
+        "description": "图片上下文保留时长（秒）",
+        "hint": "大于 0 时，超过该时长的图片会在读取时自动清理；0 表示不过期。",
+        "default": 0,
+        "slider": {"min": 0, "max": 86400, "step": 300}
+      },
+      "max_image_context_sessions": {
+        "type": "int",
+        "description": "最大图片上下文会话数",
+        "hint": "仅 session 隔离模式生效。超过上限会按最近最少使用（LRU）回收旧会话。",
+        "default": 200,
+        "slider": {"min": 20, "max": 1000, "step": 20}
+      },
+      "include_image_url_in_context": {
+        "type": "bool",
+        "description": "在 AI 图片上下文中包含原始 URL",
+        "hint": "关闭后仍可通过 image_id / index 选图，但不会把 URL 直接暴露给模型。",
+        "default": true
+      },
+      "llm_tool_silent_mode": {
+        "type": "bool",
+        "description": "LLM 工具静默模式",
+        "hint": "开启后，LLM 调用搜图工具时不会自动发送消息，结果全部由 LLM 自己处理。",
+        "default": false
+      }
+    }
+  },
+  "network": {
+    "description": "网络配置",
+    "type": "object",
+    "hint": "配置网络代理、User-Agent、图床上传等选项",
+    "items": {
+      "proxy_url": {
+        "type": "string",
+        "description": "代理服务器 URL",
+        "hint": "HTTP/HTTPS 代理地址，如 http://127.0.0.1:7890。留空或无效则不使用代理。",
+        "default": ""
+      },
+      "user_agent": {
+        "type": "string",
+        "description": "User-Agent",
+        "hint": "HTTP 请求时使用的 User-Agent。留空使用默认值 (Chrome 120)。建议与获取 Cookie 时使用的浏览器保持一致。",
+        "default": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
+      "allow_image_upload": {
+        "type": "bool",
+        "description": "允许上传图片到第三方图床",
+        "hint": "当搜图引擎需要 HTTP URL 时，本地图片/base64 图片会被上传到 Catbox 图床。",
+        "default": true
+      },
+      "allow_local_file_access": {
+        "type": "bool",
+        "description": "允许读取本地文件",
+        "hint": "允许读取 file:// 路径或本地磁盘路径的图片。关闭后仅支持 HTTP URL 和 base64 数据，可防止潜在的文件系统信息泄露。",
+        "default": false
+      }
+    }
+  },
+  "api_keys": {
+    "description": "API 密钥配置",
+    "type": "object",
+    "hint": "配置各搜图引擎的 API 密钥",
+    "items": {
+      "saucenao_api_key": {
+        "type": "string",
+        "description": "SauceNAO API Key",
+        "hint": "SauceNAO 的 API 密钥，可在 saucenao.com/user.php?page=search-api 获取。留空则不使用该引擎。",
+        "default": ""
+      },
+      "serpapi_keys": {
+        "type": "list",
+        "description": "SerpAPI Keys (Google Lens)",
+        "hint": "SerpAPI 的 API 密钥列表，支持多个 Key 负载均衡。可在 serpapi.com 获取。留空则不使用该引擎。",
+        "default": []
+      },
+      "ascii2d_session_id": {
+        "type": "string",
+        "description": "Ascii2d Session ID",
+        "hint": "访问 ascii2d.net 时获取的 _session_id Cookie 值。必填。",
+        "default": ""
+      },
+      "ascii2d_cf_clearance": {
+        "type": "string",
+        "description": "Ascii2d cf_clearance",
+        "hint": "访问 ascii2d.net 时获取的 cf_clearance Cookie 值，用于绕过 Cloudflare 验证。可选。",
+        "default": ""
+      }
+    }
+  },
+  "strategies": {
+    "description": "搜图策略配置",
+    "type": "object",
+    "hint": "启用或禁用各搜图引擎",
+    "items": {
+      "enable_saucenao": {
+        "type": "bool",
+        "description": "启用 SauceNAO 搜索",
+        "hint": "SauceNAO 擅长搜索动漫图片，支持 Pixiv、Danbooru 等数据库。需要配置 SauceNAO API Key。",
+        "default": true
+      },
+      "saucenao_similarity_threshold": {
+        "type": "int",
+        "description": "SauceNAO 相似度阈值",
+        "hint": "低于此阈值的结果将被过滤。值越低结果越多，但可能不准确；值越高结果越少，但更准确。",
+        "default": 40,
+        "slider": {"min": 0, "max": 100, "step": 5}
+      },
+      "enable_google_lens": {
+        "type": "bool",
+        "description": "启用 Google Lens 搜索",
+        "hint": "Google Lens 可搜索通用图片，通过 SerpAPI 调用。需要配置 SerpAPI Key。",
+        "default": true
+      },
+      "enable_ascii2d": {
+        "type": "bool",
+        "description": "启用 Ascii2d 搜索",
+        "hint": "Ascii2d 是日本搜图网站，支持色合和特征搜索。需要配置 session_id，cf_clearance 用于绕过 Cloudflare。",
+        "default": true
+      }
+    }
+  },
+  "display": {
+    "description": "显示配置",
+    "type": "object",
+    "hint": "搜索结果的显示方式",
+    "items": {
+      "max_results": {
+        "type": "int",
+        "description": "最大显示结果数",
+        "hint": "每个引擎返回的最大结果数量。",
+        "default": 5,
+        "slider": {"min": 1, "max": 10, "step": 1}
+      }
+    }
+  }
+}
