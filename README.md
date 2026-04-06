@@ -169,18 +169,17 @@
 ### SerpAPI（Google Lens）
 
 1. 访问 https://serpapi.com
-2. 注册账号（免费版每月 100 次）
+2. 注册账号（免费版每月 250 次）
 3. 获取 API Key
 
 ### Ascii2d
 
 1. 用 **Chrome 浏览器**访问 https://ascii2d.net
-2. 通过 Cloudflare 验证
-3. 打开开发者工具 (F12) → Application → Cookies
-4. 复制 `_session_id` Cookie 的值，填入配置项 `ascii2d_session_id`
-5. 复制 `cf_clearance` Cookie 的值，填入配置项 `ascii2d_cf_clearance`
-
-**重要：** Ascii2d 需要使用代理访问，确保获取 Cookie 和服务器请求使用相同的代理 IP。
+2. 上传一个图片然后搜索图片随后进行跳转
+3. 通过 Cloudflare 验证
+4. 打开开发者工具 (F12) → Application → Cookies
+5. 复制 `_session_id` Cookie 的值，填入配置项 `ascii2d_session_id`
+6. 复制 `cf_clearance` Cookie 的值，填入配置项 `ascii2d_cf_clearance`
 
 ---
 
@@ -198,22 +197,9 @@
 
 ### 1. Ascii2d 返回 403 错误
 
-原因：被 Cloudflare 拦截
+解决：IP被BAN了，需要使用代理换成日本或者其它区域节点
 
-解决：
-- 使用 Chrome 浏览器获取 Cookie
-- 配置代理，确保 IP 一致
-- 正确填写 `ascii2d_cf_clearance` 和 `ascii2d_session_id` 配置项
-
-### 2. LLM 不调用工具
-
-原因：模型不支持 Function Calling
-
-解决：切换到支持 `tool_use` 的模型
-
-### 3. 图片没有被识别
-
-原因：图片上下文为空
+### 2. 图片没有被识别
 
 解决：
 - 确保图片发送后有时间被捕获

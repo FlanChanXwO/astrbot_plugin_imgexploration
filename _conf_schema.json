@@ -71,7 +71,7 @@
       "allow_local_file_access": {
         "type": "bool",
         "description": "允许读取本地文件",
-        "hint": "允许读取 file:// 路径或本地磁盘路径的图片。关闭后仅支持 HTTP URL 和 base64 数据，可防止潜在的文件系统信息泄露。",
+        "hint": "允许读取 file:// 路径或本地磁盘路径的图片。",
         "default": false
       }
     }
