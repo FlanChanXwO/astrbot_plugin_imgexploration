@@ -11,9 +11,35 @@
 
 </div>
 
+
 本插件完全开源免费，欢迎 Issue 和 PR。
 
 ---
+
+## 📸 预览
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_imgexploration/master/assets/google_search.png" width="400" alt="谷歌搜图"/>
+        <br/>
+        <sub>谷歌搜图</sub>
+      </td>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_imgexploration/master/assets/google_search_llm.png" width="400" alt="谷歌LLM搜图"/>
+        <br/>
+        <sub>谷歌LLM搜图</sub>
+      </td>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_imgexploration/master/assets/sauce_search.png" width="400" alt="sauce搜图"/>
+        <br/>
+        <sub>sauce搜图</sub>
+      </td>
+    </tr>
+  </table>
+</div>
+
 
 ## ✨ 功能特性
 

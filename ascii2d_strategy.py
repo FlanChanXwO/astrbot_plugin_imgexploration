@@ -303,7 +303,19 @@ class Ascii2dStrategy(ImageSearchStrategy):
             target_url = base_url
 
         cookies = self._get_cookies()
-        headers = {"Referer": ASCII2D_BASE_URL}
+        # 模拟浏览器直接访问结果页（无 Referer）
+        # 注意：curl_cffi 会在重定向时自动处理 Referer，不要手动设置
+        headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "max-age=0",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+        }
 
         try:
             session = await self._get_session()
