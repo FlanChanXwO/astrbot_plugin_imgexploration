@@ -36,19 +36,14 @@
         <br/>
         <sub>sauce搜图</sub>
       </td>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_imgexploration/master/assets/2d_search.jpg" width="400" alt="2d搜图"/>
+        <br/>
+        <sub>2d搜图</sub>
+      </td>
     </tr>
   </table>
 </div>
-
-
-## ✨ 功能特性
-
-- 🔍 **多引擎支持** - SauceNAO、Google Lens、Ascii2d 三大搜索引擎
-- 🤖 **LLM 工具调用** - 支持通过大模型自动搜图，无需手动命令
-- 📷 **图片上下文管理** - 自动记录会话中的图片，支持会话级/全局隔离
-- 💬 **多平台适配** - aiocqhttp 支持合并转发，其他平台支持消息链
-- 🌐 **网络配置** - 支持自定义 User-Agent、代理设置
-- 🛡️ **Cloudflare 绕过** - 使用 curl_cffi 模拟浏览器 TLS 指纹
 
 ---
 
@@ -223,7 +218,9 @@
 
 ### 1. Ascii2d 返回 403 错误
 
-解决：IP被BAN了，需要使用代理换成日本或者其它区域节点
+解决：重新获取cookie，或尝试使用代理
+
+> 目前2d的反爬还是挺强的，后续会优化这个搜图方式
 
 ### 2. 图片没有被识别
 
