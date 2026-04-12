@@ -58,7 +58,7 @@ jobs:
             file_path = os.environ["FILE_PATH"]
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
                 fh.write("changelog_files=" + json.dumps([file_path]) + "\n")
-            PY
+PY
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
@@ -87,7 +87,7 @@ jobs:
 
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
                 fh.write("changelog_files=" + json.dumps(result) + "\n")
-            PY
+PY
           fi
         env:
           FILE_PATH: ${{ inputs.changelog_path }}
@@ -158,7 +158,7 @@ jobs:
               fh.write(f"version={version}\n")
               fh.write(f"tag={tag}\n")
               fh.write(f"notes_file={notes_file.as_posix()}\n")
-          PY
+PY
 
       - name: Check existing tag/release
         id: dedupe
