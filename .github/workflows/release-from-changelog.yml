@@ -51,43 +51,43 @@ jobs:
               exit 1
             fi
             python - <<'PY'
-import json
-import os
-
-file_path = os.environ["FILE_PATH"]
-with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-    fh.write("changelog_files=" + json.dumps([file_path]) + "\n")
-PY
-          else
-            before="${{ github.event.before }}"
-            after="${{ github.sha }}"
-
-            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
-              changed_files="$(git --no-pager ls-files "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
-            else
-              changed_files="$(git --no-pager diff --name-only "$before" "$after")"
-            fi
-
-            printf '%s\n' "$changed_files" \
-              | grep -E '^data/plugins/[^/]+/(CHANGELOG\.md|changelog\.md)$' > _changed_changelogs.txt || true
-
-            python - <<'PY'
-import json
-import os
-from pathlib import Path
-
-items = [line.strip() for line in Path("_changed_changelogs.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
-seen = set()
-result = []
-for item in items:
-    if item not in seen:
-        seen.add(item)
-        result.append(item)
-
-with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-    fh.write("changelog_files=" + json.dumps(result) + "\n")
-PY
-          fi
+            import json
+            import os
+            
+            file_path = os.environ["FILE_PATH"]
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                fh.write("changelog_files=" + json.dumps([file_path]) + "\n")
+            PY
+                      else
+                        before="${{ github.event.before }}"
+                        after="${{ github.sha }}"
+            
+                        if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+                          changed_files="$(git --no-pager ls-files "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
+                        else
+                          changed_files="$(git --no-pager diff --name-only "$before" "$after")"
+                        fi
+            
+                        printf '%s\n' "$changed_files" \
+                          | grep -E '^data/plugins/[^/]+/(CHANGELOG\.md|changelog\.md)$' > _changed_changelogs.txt || true
+            
+                        python - <<'PY'
+            import json
+            import os
+            from pathlib import Path
+            
+            items = [line.strip() for line in Path("_changed_changelogs.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
+            seen = set()
+            result = []
+            for item in items:
+                if item not in seen:
+                    seen.add(item)
+                    result.append(item)
+            
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                fh.write("changelog_files=" + json.dumps(result) + "\n")
+            PY
+                      fi
         env:
           FILE_PATH: ${{ inputs.changelog_path }}
 
@@ -112,52 +112,52 @@ PY
         shell: bash
         run: |
           python - <<'PY'
-import os
-import pathlib
-import re
-import sys
-
-changelog_path = pathlib.Path("${{ matrix.changelog }}")
-if not changelog_path.exists():
-    print(f"Missing changelog: {changelog_path}", file=sys.stderr)
-    sys.exit(1)
-
-parts = changelog_path.parts
-if len(parts) < 3 or parts[0] != "data" or parts[1] != "plugins":
-    print(f"Unsupported changelog path: {changelog_path}", file=sys.stderr)
-    sys.exit(1)
-plugin_name = parts[2]
-
-text = changelog_path.read_text(encoding="utf-8")
-match = re.search(r"^##\s*\[?v?(\d+\.\d+\.\d+(?:[-+][^\]\s]+)?)\]?.*$", text, re.MULTILINE)
-if not match:
-    print("No version heading like '## [1.2.3]' found.", file=sys.stderr)
-    sys.exit(1)
-
-version = match.group(1)
-start = match.start()
-next_match = re.search(r"^##\s+", text[match.end():], re.MULTILINE)
-if next_match:
-    end = match.end() + next_match.start()
-    notes = text[start:end].strip()
-else:
-    notes = text[start:].strip()
-
-prefix_input = "${{ inputs.tag_prefix }}".strip()
-if prefix_input:
-    tag = f"{prefix_input}{version}"
-else:
-    tag = f"{plugin_name}-v{version}"
-
-notes_file = pathlib.Path(f"release-notes-{plugin_name}.md")
-notes_file.write_text(notes + "\n", encoding="utf-8")
-
-with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-    fh.write(f"plugin={plugin_name}\n")
-    fh.write(f"version={version}\n")
-    fh.write(f"tag={tag}\n")
-    fh.write(f"notes_file={notes_file.as_posix()}\n")
-PY
+          import os
+          import pathlib
+          import re
+          import sys
+          
+          changelog_path = pathlib.Path("${{ matrix.changelog }}")
+          if not changelog_path.exists():
+              print(f"Missing changelog: {changelog_path}", file=sys.stderr)
+              sys.exit(1)
+          
+          parts = changelog_path.parts
+          if len(parts) < 3 or parts[0] != "data" or parts[1] != "plugins":
+              print(f"Unsupported changelog path: {changelog_path}", file=sys.stderr)
+              sys.exit(1)
+          plugin_name = parts[2]
+          
+          text = changelog_path.read_text(encoding="utf-8")
+          match = re.search(r"^##\s*\[?v?(\d+\.\d+\.\d+(?:[-+][^\]\s]+)?)\]?.*$", text, re.MULTILINE)
+          if not match:
+              print("No version heading like '## [1.2.3]' found.", file=sys.stderr)
+              sys.exit(1)
+          
+          version = match.group(1)
+          start = match.start()
+          next_match = re.search(r"^##\s+", text[match.end():], re.MULTILINE)
+          if next_match:
+              end = match.end() + next_match.start()
+              notes = text[start:end].strip()
+          else:
+              notes = text[start:].strip()
+          
+          prefix_input = "${{ inputs.tag_prefix }}".strip()
+          if prefix_input:
+              tag = f"{prefix_input}{version}"
+          else:
+              tag = f"{plugin_name}-v{version}"
+          
+          notes_file = pathlib.Path(f"release-notes-{plugin_name}.md")
+          notes_file.write_text(notes + "\n", encoding="utf-8")
+          
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"plugin={plugin_name}\n")
+              fh.write(f"version={version}\n")
+              fh.write(f"tag={tag}\n")
+              fh.write(f"notes_file={notes_file.as_posix()}\n")
+          PY
 
       - name: Check existing tag/release
         id: dedupe
