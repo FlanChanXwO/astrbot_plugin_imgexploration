@@ -54,29 +54,29 @@ jobs:
             python - <<'PY'
             import json
             import os
-            
+
             file_path = os.environ["FILE_PATH"]
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
                 fh.write("changelog_files=" + json.dumps([file_path]) + "\n")
             PY
-                      else
-                        before="${{ github.event.before }}"
-                        after="${{ github.sha }}"
-            
-                        if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
-                          changed_files="$(git --no-pager ls-files "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
-                        else
-                          changed_files="$(git --no-pager diff --name-only "$before" "$after")"
-                        fi
-            
-                        printf '%s\n' "$changed_files" \
-                          | grep -E '^data/plugins/[^/]+/(CHANGELOG\.md|changelog\.md)$' > _changed_changelogs.txt || true
-            
-                        python - <<'PY'
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              changed_files="$(git --no-pager ls-files "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
+            else
+              changed_files="$(git --no-pager diff --name-only "$before" "$after")"
+            fi
+
+            printf '%s\n' "$changed_files" \
+              | grep -E '^data/plugins/[^/]+/(CHANGELOG\.md|changelog\.md)$' > _changed_changelogs.txt || true
+
+            python - <<'PY'
             import json
             import os
             from pathlib import Path
-            
+
             items = [line.strip() for line in Path("_changed_changelogs.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
             seen = set()
             result = []
@@ -84,11 +84,11 @@ jobs:
                 if item not in seen:
                     seen.add(item)
                     result.append(item)
-            
+
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
                 fh.write("changelog_files=" + json.dumps(result) + "\n")
             PY
-                      fi
+          fi
         env:
           FILE_PATH: ${{ inputs.changelog_path }}
 
