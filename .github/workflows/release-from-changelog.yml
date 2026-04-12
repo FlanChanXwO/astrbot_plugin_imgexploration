@@ -6,8 +6,8 @@ on:
       - master
       - main
     paths:
-      - data/plugins/**/CHANGELOG.md
-      - data/plugins/**/changelog.md
+      - CHANGELOG.md
+      - changelog.md
   workflow_dispatch:
     inputs:
       changelog_path:
