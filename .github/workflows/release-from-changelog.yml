@@ -5,6 +5,8 @@ on:
     branches:
       - master
       - main
+      - workflow
+      - workflow/**
     paths:
       - CHANGELOG.md
       - changelog.md
@@ -17,7 +19,7 @@ on:
         required: false
         default: ""
       tag_prefix:
-        description: "Optional tag prefix override. Empty = <plugin>-v"
+        description: "Optional tag prefix override. Empty = v"
         required: false
         default: ""
 
@@ -76,6 +78,14 @@ jobs:
             json='[]'
           fi
 
+          count="$(printf '%s' "$json" | jq 'length')"
+          if [ "$count" -gt 1 ]; then
+            echo "Detected multiple changelog files in one push:" >&2
+            printf '%s\n' "$json" | jq -r '.[]' >&2
+            echo "Please rerun workflow_dispatch with input changelog_path to publish one target." >&2
+            exit 1
+          fi
+
           echo "changelog_files=$json" >> "$GITHUB_OUTPUT"
 
   release:
@@ -124,24 +134,25 @@ jobs:
               ;;
           esac
 
-          first_heading="$(grep -m1 -E '^##[[:space:]]*\[?v?[0-9]+\.[0-9]+\.[0-9]+([-.+][^]]+)?\]?.*$' "$changelog_path" || true)"
-          if [ -z "$first_heading" ]; then
+          first_heading_line="$(grep -n -m1 -E '^##[[:space:]]*\[?v?[0-9]+\.[0-9]+\.[0-9]+([-.+][^]]+)?\]?.*$' "$changelog_path" || true)"
+          if [ -z "$first_heading_line" ]; then
             echo "No version heading like '## [1.2.3]' found." >&2
             exit 1
           fi
 
-          version="$(printf '%s\n' "$first_heading" | sed -E 's/^##[[:space:]]*\[?v?([^]]+)\]?.*$/\1/')"
+          start_line="${first_heading_line%%:*}"
+          heading_text="${first_heading_line#*:}"
+          version="$(printf '%s\n' "$heading_text" | sed -E 's/^##[[:space:]]*\[?v?([^]]+)\]?.*$/\1/')"
 
-          notes="$(awk '
-            BEGIN { capture=0 }
-            /^##[[:space:]]*/ {
-              if (capture == 1) { exit }
-              capture=1
-            }
-            capture == 1 { print }
-          ' "$changelog_path")"
+          next_line_rel="$(tail -n +$((start_line + 1)) "$changelog_path" | grep -n -m1 -E '^##[[:space:]]*\[?v?[0-9]+\.[0-9]+\.[0-9]+([-.+][^]]+)?\]?.*$' | cut -d: -f1 || true)"
+          if [ -n "$next_line_rel" ]; then
+            end_line=$((start_line + next_line_rel - 1))
+            notes="$(sed -n "${start_line},${end_line}p" "$changelog_path")"
+          else
+            notes="$(sed -n "${start_line},\$p" "$changelog_path")"
+          fi
 
-          if [ -z "$notes" ]; then
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
             echo "Failed to extract release notes from $changelog_path" >&2
             exit 1
           fi
@@ -149,11 +160,15 @@ jobs:
           if [ -n "${{ inputs.tag_prefix }}" ]; then
             tag="${{ inputs.tag_prefix }}${version}"
           else
-            tag="${plugin_name}-v${version}"
+            tag="v${version}"
           fi
 
           notes_file="release-notes-${plugin_name}.md"
           printf '%s\n' "$notes" > "$notes_file"
+          if [ ! -s "$notes_file" ]; then
+            echo "Generated notes file is empty: $notes_file" >&2
+            exit 1
+          fi
 
           echo "plugin=$plugin_name" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -220,3 +235,14 @@ jobs:
             echo "Created release ${{ steps.parse.outputs.tag }} from ${{ matrix.changelog }}"
           fi
 
+      - name: Verify release body
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ steps.parse.outputs.tag }}"
+          body="$(gh release view "$tag" --json body --jq '.body // ""')"
+          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            echo "Release body is still empty for $tag" >&2
+            exit 1
+          fi
