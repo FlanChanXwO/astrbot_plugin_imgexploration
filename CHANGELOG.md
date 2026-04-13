@@ -47,5 +47,3 @@
 - 使用 `curl_cffi` 替代 `aiohttp` 请求 Ascii2d（绕过 Cloudflare）
 - 图片上下文使用 `OrderedDict` 存储，支持 LRU 淘汰
 - 全局共享 `aiohttp.ClientSession` 提升性能
-
-

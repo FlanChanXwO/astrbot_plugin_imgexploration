@@ -67,8 +67,7 @@ jobs:
           fi
 
           json="$(printf '%s\n' "$changed_files" \
-            | grep -E '^data/plugins/[^/]+/(CHANGELOG\.md|changelog\.md)$' \
-            | awk 'NF' \
+            | awk '/^data\/plugins\/[^/]+\/(CHANGELOG\.md|changelog\.md)$/ && NF { print }' \
             | sort -u \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')"
 
