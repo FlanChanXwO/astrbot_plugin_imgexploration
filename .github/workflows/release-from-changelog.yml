@@ -219,3 +219,4 @@ jobs:
           else
             echo "Created release ${{ steps.parse.outputs.tag }} from ${{ matrix.changelog }}"
           fi
+
