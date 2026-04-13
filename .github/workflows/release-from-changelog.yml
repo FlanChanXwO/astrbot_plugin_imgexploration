@@ -61,13 +61,14 @@ jobs:
           after="${{ github.sha }}"
 
           if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
-            changed_files="$(git --no-pager ls-files "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
+            changed_files="$(git --no-pager ls-files "CHANGELOG.md" "changelog.md" "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
           else
             changed_files="$(git --no-pager diff --name-only "$before" "$after")"
           fi
 
           json="$(printf '%s\n' "$changed_files" \
-            | awk '/^data\/plugins\/[^/]+\/(CHANGELOG\.md|changelog\.md)$/ && NF { print }' \
+            | awk '/^(CHANGELOG\.md|changelog\.md)$/ || /^data\/plugins\/[^/]+\/(CHANGELOG\.md|changelog\.md)$/ { print }' \
+            | awk 'NF' \
             | sort -u \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')"
 
@@ -105,11 +106,23 @@ jobs:
             exit 1
           fi
 
-          IFS='/' read -r p1 p2 plugin_name _ <<< "$changelog_path"
-          if [ "$p1" != "data" ] || [ "$p2" != "plugins" ] || [ -z "$plugin_name" ]; then
-            echo "Unsupported changelog path: $changelog_path" >&2
-            exit 1
-          fi
+          plugin_name=""
+          case "$changelog_path" in
+            CHANGELOG.md|changelog.md)
+              plugin_name="${{ github.event.repository.name }}"
+              ;;
+            data/plugins/*/CHANGELOG.md|data/plugins/*/changelog.md)
+              IFS='/' read -r p1 p2 plugin_name _ <<< "$changelog_path"
+              if [ "$p1" != "data" ] || [ "$p2" != "plugins" ] || [ -z "$plugin_name" ]; then
+                echo "Unsupported changelog path: $changelog_path" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported changelog path: $changelog_path" >&2
+              exit 1
+              ;;
+          esac
 
           first_heading="$(grep -m1 -E '^##[[:space:]]*\[?v?[0-9]+\.[0-9]+\.[0-9]+([-.+][^]]+)?\]?.*$' "$changelog_path" || true)"
           if [ -z "$first_heading" ]; then
