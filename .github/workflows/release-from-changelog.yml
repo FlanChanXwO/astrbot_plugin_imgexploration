@@ -167,46 +167,55 @@ jobs:
         shell: bash
         run: |
           tag="${{ steps.parse.outputs.tag }}"
-          skip="false"
-          reason=""
+          tag_exists="false"
+          release_exists="false"
 
           if gh api "repos/${{ github.repository }}/git/ref/tags/${tag}" >/dev/null 2>&1; then
-            skip="true"
-            reason="tag '$tag' already exists"
+            tag_exists="true"
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            skip="true"
-            if [ -z "$reason" ]; then
-              reason="release '$tag' already exists"
-            else
-              reason="$reason; release '$tag' already exists"
-            fi
+            release_exists="true"
           fi
 
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
+          echo "release_exists=$release_exists" >> "$GITHUB_OUTPUT"
 
-      - name: Skip summary
-        if: steps.dedupe.outputs.skip == 'true'
-        shell: bash
-        run: |
-          echo "Skip creating release for ${{ steps.parse.outputs.plugin }}: ${{ steps.dedupe.outputs.reason }}"
-
-      - name: Create release and tag
-        if: steps.dedupe.outputs.skip != 'true'
+      - name: Update existing release notes
+        if: steps.dedupe.outputs.release_exists == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           tag="${{ steps.parse.outputs.tag }}"
-          gh release create "$tag" \
-            --target "$GITHUB_SHA" \
+          gh release edit "$tag" \
             --title "$tag" \
             --notes-file "${{ steps.parse.outputs.notes_file }}"
 
-      - name: Release summary
-        if: steps.dedupe.outputs.skip != 'true'
+      - name: Create release and tag
+        if: steps.dedupe.outputs.release_exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          echo "Created release ${{ steps.parse.outputs.tag }} from ${{ matrix.changelog }}"
+          tag="${{ steps.parse.outputs.tag }}"
+
+          if [ "${{ steps.dedupe.outputs.tag_exists }}" = "true" ]; then
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes-file "${{ steps.parse.outputs.notes_file }}"
+          else
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "$tag" \
+              --notes-file "${{ steps.parse.outputs.notes_file }}"
+          fi
+
+      - name: Release summary
+        shell: bash
+        run: |
+          if [ "${{ steps.dedupe.outputs.release_exists }}" = "true" ]; then
+            echo "Updated release ${{ steps.parse.outputs.tag }} from ${{ matrix.changelog }}"
+          else
+            echo "Created release ${{ steps.parse.outputs.tag }} from ${{ matrix.changelog }}"
+          fi
