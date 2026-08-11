@@ -94,6 +94,7 @@ def _load_google_lens_module():
 
     models = types.ModuleType("plugin.core.models")
     models.SearchResultItem = types.SimpleNamespace
+    models.ProviderSearchError = type("ProviderSearchError", (Exception,), {})
     sys.modules["plugin.core.models"] = models
 
     strategy = types.ModuleType("plugin.core.strategy")
@@ -188,9 +189,9 @@ class GoogleLensStrategyTest(unittest.IsolatedAsyncioTestCase):
     async def test_http_429_tries_each_key_before_giving_up(self) -> None:
         strategy, calls = self._strategy_with_statuses([429, 429, 429])
 
-        result = await strategy.search("https://example.com/image.jpg")
+        with self.assertRaises(self.module.ProviderSearchError):
+            await strategy.search("https://example.com/image.jpg")
 
-        self.assertEqual([], result)
         self.assertEqual(["key-a", "key-b", "key-c"], calls)
 
     async def test_successful_result_parsing_and_thumbnail_download(self) -> None:
@@ -268,13 +269,15 @@ class GoogleLensStrategyTest(unittest.IsolatedAsyncioTestCase):
         download_thumbnails.assert_awaited_once_with(expected_thumbnail_urls)
 
     async def test_non_quota_http_error_does_not_exhaust_or_retry_key(self) -> None:
-        strategy, calls = self._strategy_with_statuses([500])
+        strategy, calls = self._strategy_with_statuses([500, 500, 500])
 
-        result = await strategy.search("https://example.com/image.jpg")
+        with self.assertRaises(self.module.ProviderSearchError):
+            await strategy.search("https://example.com/image.jpg")
 
-        self.assertEqual([], result)
-        self.assertEqual(["key-a"], calls)
+        self.assertEqual(["key-a", "key-b", "key-c"], calls)
         self.assertNotIn("key-a", strategy._quota_cache)
+        self.assertNotIn("key-b", strategy._quota_cache)
+        self.assertNotIn("key-c", strategy._quota_cache)
 
     async def test_quota_error_payload_retries_with_next_key(self) -> None:
         strategy, calls = self._strategy_with_statuses(
@@ -294,10 +297,11 @@ class GoogleLensStrategyTest(unittest.IsolatedAsyncioTestCase):
     async def test_service_name_and_search_validation(self) -> None:
         strategy_no_keys = self.module.GoogleLensStrategy(api_keys=[])
         self.assertEqual(strategy_no_keys.get_service_name(), "Google Lens")
-        self.assertEqual(
-            await strategy_no_keys.search("https://example.com/img.jpg"), []
-        )
+        with self.assertRaises(self.module.ProviderSearchError):
+            await strategy_no_keys.search("https://example.com/img.jpg")
 
         strategy = self.module.GoogleLensStrategy(api_keys=["key-a"])
-        self.assertEqual(await strategy.search("base64://abc"), [])
-        self.assertEqual(await strategy.search("file:///local.png"), [])
+        with self.assertRaises(self.module.ProviderSearchError):
+            await strategy.search("base64://abc")
+        with self.assertRaises(self.module.ProviderSearchError):
+            await strategy.search("file:///local.png")

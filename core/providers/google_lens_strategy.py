@@ -18,7 +18,7 @@ from ..constant import (
     HTTP_TIMEOUT_SECONDS,
     SERPAPI_BASE_URL,
 )
-from ..models import SearchResultItem
+from ..models import ProviderSearchError, SearchResultItem
 from ..strategy import ImageSearchStrategy
 from ..utils import download_bytes_batch, get_aiohttp_session, get_proxy_url
 
@@ -75,11 +75,11 @@ class GoogleLensStrategy(ImageSearchStrategy):
         """
         if not self.api_keys:
             logger.warning("[GoogleLens] 未配置 SerpAPI Key，跳过搜索")
-            return []
+            raise ProviderSearchError("未配置 SerpAPI Key")
 
         if not image_url.startswith(("http://", "https://")):
             logger.warning("[GoogleLens] SerpAPI 不支持本地文件")
-            return []
+            raise ProviderSearchError("SerpAPI 不支持本地文件")
 
         # 尝试所有可用的 API Key
         last_exception: Exception | None = None
@@ -106,9 +106,10 @@ class GoogleLensStrategy(ImageSearchStrategy):
             logger.error(
                 f"[GoogleLens] 所有 API Key 均失败，最后错误: {last_exception}"
             )
+            raise ProviderSearchError(f"所有 API Key 均失败: {last_exception}")
         else:
             logger.error("[GoogleLens] 所有 API Key 已耗尽")
-        return []
+            raise ProviderSearchError("所有 API Key 已耗尽")
 
     async def _search_with_key(self, image_url: str) -> list[SearchResultItem]:
         """使用当前选中的 Key 执行搜索.
@@ -150,7 +151,7 @@ class GoogleLensStrategy(ImageSearchStrategy):
                     await self._mark_key_exhausted(api_key)
                     raise SerpApiQuotaExhaustedError(api_key, status=resp.status)
                 logger.error(f"[GoogleLens] API 返回错误: HTTP {resp.status}")
-                return []
+                raise ProviderSearchError(f"API 返回错误: HTTP {resp.status}")
 
             text = await resp.text()
             data = json.loads(text)
@@ -162,7 +163,7 @@ class GoogleLensStrategy(ImageSearchStrategy):
                 await self._mark_key_exhausted(api_key)
                 raise SerpApiQuotaExhaustedError(api_key, status=None)
             logger.error(f"[GoogleLens] SerpAPI 错误: {error_msg}")
-            return []
+            raise ProviderSearchError(f"SerpAPI 错误: {error_msg}")
 
         # 解析结果
         results = []

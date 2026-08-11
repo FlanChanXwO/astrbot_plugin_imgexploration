@@ -404,3 +404,47 @@ class LLMToolsTests(PluginTestCase):
                 strategy_names=None,
             )
             mock_send.assert_not_awaited()
+
+    async def test_tool_search_image_reports_all_providers_failed(self) -> None:
+        plugin = self.make_plugin(SimpleNamespace())
+        plugin.strategies = [object()]
+        event = FakeEvent([])
+        plugin.service = MagicMock()
+        plugin.service.get_available_strategies.return_value = ["SauceNAO"]
+        plugin.service.explore = AsyncMock(
+            return_value=ExplorationResult(
+                attempted_providers=["SauceNAO"],
+                failed_providers=["SauceNAO"],
+            )
+        )
+        source_url = "https://example.com/source.jpg"
+
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.main.get_image_context_manager"
+            ) as mock_mgr_fn,
+            patch(
+                "astrbot_plugin_imgexploration.main.get_http_image_url",
+                new=AsyncMock(return_value=source_url),
+            ) as mock_convert,
+            patch(
+                "astrbot_plugin_imgexploration.main.result_sender.send_search_results",
+                new=AsyncMock(),
+            ) as mock_send,
+        ):
+            mock_mgr = MagicMock()
+            mock_mgr.get_image_by_index.return_value = source_url
+            mock_mgr_fn.return_value = mock_mgr
+
+            res_dict = json.loads(await plugin.tool_search_image(event))
+
+            self.assertFalse(res_dict["success"])
+            self.assertIn("搜索服务暂时不可用", res_dict["error"])
+            self.assertNotIn("SauceNAO", res_dict["error"])
+            mock_mgr.get_image_by_index.assert_called_once_with(event, -1)
+            mock_convert.assert_awaited_once_with(source_url)
+            plugin.service.explore.assert_awaited_once_with(
+                source_url,
+                strategy_names=None,
+            )
+            mock_send.assert_not_awaited()

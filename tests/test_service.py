@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from astrbot_plugin_imgexploration.core.models import (
     ExplorationResult,
+    ProviderSearchError,
     SearchResultItem,
 )
 from astrbot_plugin_imgexploration.core.service import ImgExplorationService
@@ -95,12 +96,18 @@ class ImgExplorationServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsInstance(res1, ExplorationResult)
         self.assertEqual(len(res1.items), 0)
+        self.assertEqual(res1.attempted_providers, [])
+        self.assertEqual(res1.failed_providers, [])
+        self.assertFalse(res1.all_failed)
 
         # No strategies configured in service
         empty_service = ImgExplorationService([])
         res2 = await empty_service.explore("https://example.com/target.jpg")
         self.assertIsInstance(res2, ExplorationResult)
         self.assertEqual(len(res2.items), 0)
+        self.assertEqual(res2.attempted_providers, [])
+        self.assertEqual(res2.failed_providers, [])
+        self.assertFalse(res2.all_failed)
 
     async def test_explore_parallel_execution_and_exception_handling(self) -> None:
         item_a = SearchResultItem(title="Result A", url="https://source.a/1")
@@ -108,7 +115,7 @@ class ImgExplorationServiceTests(unittest.IsolatedAsyncioTestCase):
 
         strat_success1 = DummyStrategy("StratSuccess1", [item_a])
         strat_failing = DummyStrategy(
-            "StratFailing", raise_exc=RuntimeError("Provider offline")
+            "StratFailing", raise_exc=ProviderSearchError("Provider offline")
         )
         strat_success2 = DummyStrategy("StratSuccess2", [item_b])
 
@@ -120,6 +127,12 @@ class ImgExplorationServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(result.items), 2)
             self.assertEqual(result.items[0].title, "Result A")
             self.assertEqual(result.items[1].title, "Result B")
+            self.assertEqual(
+                result.attempted_providers,
+                ["StratSuccess1", "StratFailing", "StratSuccess2"],
+            )
+            self.assertEqual(result.failed_providers, ["StratFailing"])
+            self.assertFalse(result.all_failed)
             mock_fill.assert_awaited_once_with([item_a, item_b])
 
     async def test_explore_main_flow_exception_handling(self) -> None:
@@ -132,6 +145,54 @@ class ImgExplorationServiceTests(unittest.IsolatedAsyncioTestCase):
             result = await service.explore("https://example.com/target.jpg")
             self.assertIsInstance(result, ExplorationResult)
             self.assertEqual(len(result.items), 0)
+            self.assertEqual(result.attempted_providers, ["SauceNAO"])
+            self.assertEqual(result.failed_providers, ["SauceNAO"])
+            self.assertTrue(result.all_failed)
+
+    async def test_explore_all_providers_failed(self) -> None:
+        strat_fail1 = DummyStrategy(
+            "Fail1", raise_exc=ProviderSearchError("Auth failed")
+        )
+        strat_fail2 = DummyStrategy("Fail2", raise_exc=ProviderSearchError("Timeout"))
+
+        service = ImgExplorationService([strat_fail1, strat_fail2])
+
+        with patch.object(service, "_fill_thumbnails", new=AsyncMock()):
+            result = await service.explore("https://example.com/image.jpg")
+
+            self.assertEqual(len(result.items), 0)
+            self.assertEqual(result.attempted_providers, ["Fail1", "Fail2"])
+            self.assertEqual(result.failed_providers, ["Fail1", "Fail2"])
+            self.assertTrue(result.all_failed)
+
+    async def test_explore_valid_empty_result_is_not_failure(self) -> None:
+        strat_empty = DummyStrategy("EmptyProvider", [])
+        service = ImgExplorationService([strat_empty])
+
+        with patch.object(service, "_fill_thumbnails", new=AsyncMock()):
+            result = await service.explore("https://example.com/image.jpg")
+
+            self.assertEqual(len(result.items), 0)
+            self.assertEqual(result.attempted_providers, ["EmptyProvider"])
+            self.assertEqual(result.failed_providers, [])
+            self.assertFalse(result.all_failed)
+
+    async def test_explore_partial_success_with_empty_and_failure(self) -> None:
+        item = SearchResultItem(title="Result", url="https://source.com/1")
+        strat_success = DummyStrategy("Success", [item])
+        strat_empty = DummyStrategy("Empty", [])
+        strat_fail = DummyStrategy("Fail", raise_exc=ProviderSearchError("Error"))
+
+        service = ImgExplorationService([strat_success, strat_empty, strat_fail])
+
+        with patch.object(service, "_fill_thumbnails", new=AsyncMock()):
+            result = await service.explore("https://example.com/image.jpg")
+
+            self.assertEqual(len(result.items), 1)
+            self.assertEqual(result.items[0].title, "Result")
+            self.assertEqual(result.attempted_providers, ["Success", "Empty", "Fail"])
+            self.assertEqual(result.failed_providers, ["Fail"])
+            self.assertFalse(result.all_failed)
 
     async def test_fill_thumbnails(self) -> None:
         # Item 1: Already has thumbnail_bytes -> skip

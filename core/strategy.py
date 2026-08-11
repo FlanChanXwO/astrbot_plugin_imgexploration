@@ -14,6 +14,11 @@ class ImageSearchStrategy(ABC):
     """搜图策略抽象基类.
 
     所有搜图引擎需要实现此接口。
+
+    搜索约定:
+    - 返回空列表 [] 表示搜索成功但没有匹配结果
+    - 抛出 ProviderSearchError 表示提供商预期失败（凭据、HTTP、API 错误等）
+    - 抛出其他异常表示未预期的内部错误
     """
 
     @abstractmethod

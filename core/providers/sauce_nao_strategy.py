@@ -16,7 +16,7 @@ from ..constant import (
     HTTP_TIMEOUT_SECONDS,
     SAUCENAO_BASE_URL,
 )
-from ..models import SearchResultItem
+from ..models import ProviderSearchError, SearchResultItem
 from ..strategy import ImageSearchStrategy
 from ..utils import get_aiohttp_session, get_proxy_url, get_user_agent
 
@@ -59,11 +59,11 @@ class SauceNaoStrategy(ImageSearchStrategy):
         """
         if not self.api_key:
             logger.warning("[SauceNAO] 未配置 API Key，跳过搜索")
-            return []
+            raise ProviderSearchError("未配置 API Key")
 
         if not image_url.startswith(("http://", "https://")):
             logger.warning(f"[SauceNAO] 不支持的图片格式: {image_url}")
-            return []
+            raise ProviderSearchError("不支持的图片格式")
 
         results: list[SearchResultItem] = []
 
@@ -93,7 +93,7 @@ class SauceNaoStrategy(ImageSearchStrategy):
             ) as resp:
                 if resp.status != 200:
                     logger.error(f"[SauceNAO] API 请求失败: HTTP {resp.status}")
-                    return results
+                    raise ProviderSearchError(f"API 请求失败: HTTP {resp.status}")
 
                 text = await resp.text()
                 json_data = json.loads(text)
@@ -107,6 +107,7 @@ class SauceNaoStrategy(ImageSearchStrategy):
                         if status != 0:
                             message = header.get("message", "未知错误")
                             logger.error(f"[SauceNAO] API 错误: {message}")
+                            raise ProviderSearchError(f"API 错误: {message}")
                     return results
 
                 for node in json_data["results"]:
@@ -150,8 +151,13 @@ class SauceNaoStrategy(ImageSearchStrategy):
                     if len(results) >= self.max_results:
                         break
 
+        except ProviderSearchError:
+            raise
         except Exception as e:
             logger.error(f"[SauceNAO] 搜索失败: {e}")
+            raise ProviderSearchError(f"搜索失败: {e}") from e
+
+        return results
 
         return results
 

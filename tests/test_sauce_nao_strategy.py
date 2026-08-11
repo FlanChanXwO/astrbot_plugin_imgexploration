@@ -4,6 +4,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from astrbot_plugin_imgexploration.core.models import ProviderSearchError
 from astrbot_plugin_imgexploration.core.providers.sauce_nao_strategy import (
     SauceNaoStrategy,
 )
@@ -29,13 +30,14 @@ class SauceNaoStrategyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_validation_failures(self) -> None:
         strategy_no_key = SauceNaoStrategy(api_key=None)
-        self.assertEqual(
-            await strategy_no_key.search("https://example.com/img.jpg"), []
-        )
+        with self.assertRaises(ProviderSearchError):
+            await strategy_no_key.search("https://example.com/img.jpg")
 
         strategy = SauceNaoStrategy(api_key="my_key")
-        self.assertEqual(await strategy.search("base64://abc"), [])
-        self.assertEqual(await strategy.search("file:///local/path.jpg"), [])
+        with self.assertRaises(ProviderSearchError):
+            await strategy.search("base64://abc")
+        with self.assertRaises(ProviderSearchError):
+            await strategy.search("file:///local/path.jpg")
 
     async def test_search_api_http_error(self) -> None:
         strategy = SauceNaoStrategy(api_key="valid_key")
@@ -47,12 +49,14 @@ class SauceNaoStrategyTests(unittest.IsolatedAsyncioTestCase):
         context_mock.__aenter__.return_value = resp_500
         session_mock.get.return_value = context_mock
 
-        with patch(
-            "astrbot_plugin_imgexploration.core.providers.sauce_nao_strategy.get_aiohttp_session",
-            return_value=session_mock,
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.core.providers.sauce_nao_strategy.get_aiohttp_session",
+                return_value=session_mock,
+            ),
+            self.assertRaises(ProviderSearchError),
         ):
-            results = await strategy.search("https://example.com/img.jpg")
-            self.assertEqual(results, [])
+            await strategy.search("https://example.com/img.jpg")
 
     async def test_search_api_error_response(self) -> None:
         strategy = SauceNaoStrategy(api_key="valid_key")
@@ -69,12 +73,14 @@ class SauceNaoStrategyTests(unittest.IsolatedAsyncioTestCase):
         context_mock.__aenter__.return_value = resp_error
         session_mock.get.return_value = context_mock
 
-        with patch(
-            "astrbot_plugin_imgexploration.core.providers.sauce_nao_strategy.get_aiohttp_session",
-            return_value=session_mock,
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.core.providers.sauce_nao_strategy.get_aiohttp_session",
+                return_value=session_mock,
+            ),
+            self.assertRaises(ProviderSearchError),
         ):
-            results = await strategy.search("https://example.com/img.jpg")
-            self.assertEqual(results, [])
+            await strategy.search("https://example.com/img.jpg")
 
     async def test_search_success_parsing_and_threshold_filtering(self) -> None:
         strategy = SauceNaoStrategy(api_key="valid_key", similarity_threshold=60)

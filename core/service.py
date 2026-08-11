@@ -11,7 +11,7 @@ import time
 from astrbot.api import logger
 
 from .constant import STRATEGY_ALIAS_MAP
-from .models import ExplorationResult, SearchResultItem
+from .models import ExplorationResult, ProviderSearchError, SearchResultItem
 from .strategy import ImageSearchStrategy
 from .utils import download_bytes
 
@@ -100,11 +100,17 @@ class ImgExplorationService:
                 f"[ImgExploration] 指定的策略 {strategy_names} 全部不可用，"
                 f"当前可用策略: {available}"
             )
-            return ExplorationResult()
+            return ExplorationResult(
+                attempted_providers=[],
+                failed_providers=[],
+            )
 
         if not strategies_to_use:
             logger.warning("[ImgExploration] 未找到任何可用的搜图策略")
-            return ExplorationResult()
+            return ExplorationResult(
+                attempted_providers=[],
+                failed_providers=[],
+            )
 
         start_time = time.monotonic()
         strategy_names_str = ", ".join(s.get_service_name() for s in strategies_to_use)
@@ -120,11 +126,27 @@ class ImgExplorationService:
 
             # 聚合结果
             all_items: list[SearchResultItem] = []
+            attempted_providers: list[str] = []
+            failed_providers: list[str] = []
+
             for i, result in enumerate(results_list):
-                if isinstance(result, Exception):
+                provider_name = strategies_to_use[i].get_service_name()
+                attempted_providers.append(provider_name)
+
+                if isinstance(result, ProviderSearchError):
                     logger.error(
-                        f"[ImgExploration] 策略 [{strategies_to_use[i].get_service_name()}] 执行失败: {result}"
+                        f"[ImgExploration] 策略 [{provider_name}] 预期失败: {result}"
                     )
+                    failed_providers.append(provider_name)
+                elif isinstance(result, asyncio.CancelledError):
+                    # 提供商子任务被取消，重新抛出以传播取消
+                    logger.warning(f"[ImgExploration] 策略 [{provider_name}] 被取消")
+                    raise result
+                elif isinstance(result, Exception):
+                    logger.error(
+                        f"[ImgExploration] 策略 [{provider_name}] 执行失败: {result}"
+                    )
+                    failed_providers.append(provider_name)
                 elif isinstance(result, list):
                     all_items.extend(result)
 
@@ -138,11 +160,22 @@ class ImgExplorationService:
             elapsed = time.monotonic() - start_time
             logger.info(f"[ImgExploration] 任务结束，总耗时: {elapsed:.2f}s")
 
-            return ExplorationResult(items=all_items)
+            return ExplorationResult(
+                items=all_items,
+                attempted_providers=attempted_providers,
+                failed_providers=failed_providers,
+            )
 
+        except asyncio.CancelledError:
+            # 外层搜索被取消，重新抛出
+            logger.warning("[ImgExploration] 搜索被取消")
+            raise
         except Exception as e:
             logger.error(f"[ImgExploration] 搜索主流程异常: {e}")
-            return ExplorationResult()
+            return ExplorationResult(
+                attempted_providers=[s.get_service_name() for s in strategies_to_use],
+                failed_providers=[s.get_service_name() for s in strategies_to_use],
+            )
 
     @staticmethod
     async def _fill_thumbnails(items: list[SearchResultItem]) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from astrbot_plugin_imgexploration.core.models import ProviderSearchError
 from astrbot_plugin_imgexploration.core.providers.ascii2d_strategy import (
     Ascii2dStrategy,
 )
@@ -45,8 +46,10 @@ class Ascii2dStrategyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_validation_failures(self) -> None:
         strategy = Ascii2dStrategy()
-        self.assertEqual(await strategy.search("base64://abc"), [])
-        self.assertEqual(await strategy.search("file:///local.jpg"), [])
+        with self.assertRaises(ProviderSearchError):
+            await strategy.search("base64://abc")
+        with self.assertRaises(ProviderSearchError):
+            await strategy.search("file:///local.jpg")
 
     async def test_session_lifecycle_and_close(self) -> None:
         strategy = Ascii2dStrategy()

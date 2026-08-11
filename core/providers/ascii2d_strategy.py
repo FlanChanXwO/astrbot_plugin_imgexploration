@@ -21,7 +21,7 @@ from ..constant import (
     DEFAULT_ASCII2D_COLOR_MAX_RESULTS,
     HTTP_TIMEOUT_SECONDS,
 )
-from ..models import SearchResultItem
+from ..models import ProviderSearchError, SearchResultItem
 from ..strategy import ImageSearchStrategy
 from ..utils import download_bytes, get_proxy_url
 
@@ -127,20 +127,20 @@ class Ascii2dStrategy(ImageSearchStrategy):
         """
         if not image_url.startswith(("http://", "https://")):
             logger.warning("[Ascii2d] 仅支持 HTTP URL")
-            return []
+            raise ProviderSearchError("仅支持 HTTP URL")
 
         try:
             # 步骤 1: 获取 authenticity_token
             token = await self._fetch_authenticity_token()
             if not token:
                 logger.error("[Ascii2d] 获取 token 失败")
-                return []
+                raise ProviderSearchError("获取 token 失败")
 
             # 步骤 2: 提交搜索请求，获取结果页 URL
             result_url = await self._post_url_search(image_url, token)
             if not result_url:
                 logger.error("[Ascii2d] 搜索请求失败")
-                return []
+                raise ProviderSearchError("搜索请求失败")
 
             # 步骤 3: 并行获取 color 和 bovw 结果
             color_results, bovw_results = await asyncio.gather(
@@ -185,9 +185,11 @@ class Ascii2dStrategy(ImageSearchStrategy):
             logger.info(f"[Ascii2d] 搜索完成，获取 {len(final_results)} 条结果")
             return final_results
 
+        except ProviderSearchError:
+            raise
         except Exception as e:
             logger.error(f"[Ascii2d] 搜索异常: {e}")
-            return []
+            raise ProviderSearchError(f"搜索异常: {e}") from e
 
     async def _fetch_authenticity_token(self) -> str | None:
         """从 Ascii2d 主页获取 authenticity_token.

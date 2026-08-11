@@ -475,6 +475,15 @@ class ImgExplorationPlugin(Star):
         # 执行搜索
         result = await self.service.explore(http_url, strategy_names=strategy_names)
 
+        if result.all_failed:
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": "搜索服务暂时不可用，请稍后重试",
+                },
+                ensure_ascii=False,
+            )
+
         if not result.items:
             return json.dumps(
                 {"success": False, "error": "未找到相关图片来源"}, ensure_ascii=False
@@ -722,6 +731,9 @@ class ImgExplorationPlugin(Star):
             image_url,
             strategy_names=strategy_names,
         )
+
+        if result.all_failed:
+            return "搜索服务暂时不可用，请稍后重试。"
 
         if not result.items:
             return "未找到相关图片来源，请尝试更换图片或稍后重试。"

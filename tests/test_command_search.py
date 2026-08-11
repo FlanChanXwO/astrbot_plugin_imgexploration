@@ -454,6 +454,47 @@ class CommandSearchRunnerTests(PluginTestCase):
         )
         send_results.assert_not_awaited()
 
+    async def test_reports_all_providers_failed(self) -> None:
+        timeline: list[tuple[str, object]] = []
+        service = RecordingService(
+            timeline,
+            ExplorationResult(
+                attempted_providers=["SauceNAO", "GoogleLens"],
+                failed_providers=["SauceNAO", "GoogleLens"],
+            ),
+        )
+        plugin = self.make_plugin(service)
+        event = FakeEvent(timeline)
+
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.main.get_http_image_url",
+                new=AsyncMock(return_value="https://image.example/source.jpg"),
+            ),
+            patch(
+                "astrbot_plugin_imgexploration.core.result_sender.send_search_results",
+                new=AsyncMock(),
+            ) as send_results,
+        ):
+            terminal_message = await plugin._run_command_search(
+                event,
+                "source",
+                None,
+            )
+
+        self.assertEqual(
+            timeline,
+            [
+                ("send", "搜索中..."),
+                ("explore", ("https://image.example/source.jpg", None)),
+            ],
+        )
+        self.assertEqual(
+            terminal_message,
+            "搜索服务暂时不可用，请稍后重试。",
+        )
+        send_results.assert_not_awaited()
+
     async def test_prefers_http_file_over_non_http_url(self) -> None:
         timeline: list[tuple[str, object]] = []
         service = RecordingService(timeline, ExplorationResult())
