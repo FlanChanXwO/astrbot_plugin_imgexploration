@@ -188,6 +188,7 @@ async def send_plain_text_message(
         if info_parts:
             lines.append(" | ".join(info_parts))
         lines.append(f"链接: {item.url}")
-        lines.append("---")
+        if idx < len(items):
+            lines.append("---")
 
-    await event.send(event.plain_result("\n".join(lines).rstrip("-\n")))
+    await event.send(event.plain_result("\n".join(lines)))
