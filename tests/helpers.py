@@ -20,12 +20,14 @@ class FakeEvent:
         is_command: bool | None = None,
         raw_message: object | None = None,
         message_id: str = "message-1",
+        platform_name: str = "aiocqhttp",
     ) -> None:
         self.timeline = timeline
         self.message_str = message_str
         self._messages = messages or []
         self.unified_msg_origin = unified_msg_origin
         self._sender_id = sender_id
+        self._platform_name = platform_name
         self.message_obj = SimpleNamespace(
             message_id=message_id,
             raw_message=raw_message,
@@ -41,6 +43,9 @@ class FakeEvent:
 
     def get_sender_id(self) -> str:
         return self._sender_id
+
+    def get_platform_name(self) -> str:
+        return self._platform_name
 
     @staticmethod
     def plain_result(text: str) -> str:

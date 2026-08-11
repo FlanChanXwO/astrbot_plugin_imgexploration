@@ -3,11 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call, patch
 
-from astrbot.core.message.components import Image, Reply
+from astrbot.core.message.components import At, Image, Plain, Reply
+from astrbot.core.star.filter.platform_adapter_type import PlatformAdapterType
+from astrbot.core.star.star_handler import star_handlers_registry
 from astrbot_plugin_imgexploration.core.models import (
     ExplorationResult,
     SearchResultItem,
 )
+from astrbot_plugin_imgexploration.main import ImgExplorationPlugin
 
 from .helpers import FakeEvent, PluginTestCase
 
@@ -118,6 +121,224 @@ class CommandHandlerTests(PluginTestCase):
             ["sauce", "2d"],
         )
         get_image_from_reply.assert_not_awaited()
+
+
+class AutoMentionCommandTests(PluginTestCase):
+    @staticmethod
+    def _reply_command_components(
+        command_text: str = "/搜图",
+        *,
+        reply_sender_id: str | int = "42",
+        mention_qq: str | int = "42",
+    ) -> list[object]:
+        return [
+            Reply(id="123", sender_id=reply_sender_id),
+            At(qq=mention_qq),
+            Plain(command_text),
+        ]
+
+    async def test_auto_mention_handler_rejects_invalid_shapes(self) -> None:
+        rejected_cases = [
+            (
+                "already activated command",
+                self._reply_command_components(),
+                True,
+            ),
+            (
+                "mismatched mention id",
+                self._reply_command_components(mention_qq="43"),
+                False,
+            ),
+            (
+                "empty reply sender id",
+                self._reply_command_components(reply_sender_id=0, mention_qq=0),
+                False,
+            ),
+            (
+                "reordered components",
+                [
+                    At(qq="42"),
+                    Reply(id="123", sender_id="42"),
+                    Plain("/搜图"),
+                ],
+                False,
+            ),
+            (
+                "extra component",
+                [
+                    *self._reply_command_components(),
+                    Plain("附加文本"),
+                ],
+                False,
+            ),
+            (
+                "missing reply",
+                [At(qq="42"), Plain("/搜图")],
+                False,
+            ),
+            (
+                "missing slash",
+                self._reply_command_components("搜图"),
+                False,
+            ),
+            (
+                "similar command name",
+                self._reply_command_components("/搜图片"),
+                False,
+            ),
+            (
+                "whitespace without arguments",
+                self._reply_command_components("/搜图   "),
+                False,
+            ),
+        ]
+        for label, messages, is_command in rejected_cases:
+            with self.subTest(label=label):
+                event = FakeEvent(
+                    [],
+                    message_str="@member(42) /搜图",
+                    messages=messages,
+                    is_command=is_command,
+                )
+                plugin = self.make_plugin(SimpleNamespace())
+                plugin._run_command_search = AsyncMock(return_value=None)
+
+                yielded = [
+                    result
+                    async for result in plugin.search_image_auto_mention_cmd(event)
+                ]
+
+                self.assertEqual(yielded, [])
+                self.assertFalse(event.is_stopped())
+                plugin._run_command_search.assert_not_awaited()
+
+    def test_auto_mention_handler_is_aiocqhttp_only_and_priority_two(self) -> None:
+        handler_full_name = (
+            f"{ImgExplorationPlugin.search_image_auto_mention_cmd.__module__}_"
+            f"{ImgExplorationPlugin.search_image_auto_mention_cmd.__name__}"
+        )
+        handler = star_handlers_registry.get_handler_by_full_name(handler_full_name)
+
+        self.assertIsNotNone(handler)
+        assert handler is not None
+        self.assertEqual(handler.extras_configs["priority"], 2)
+        self.assertEqual(len(handler.event_filters), 1)
+        platform_filter = handler.event_filters[0]
+        self.assertEqual(platform_filter.platform_type, PlatformAdapterType.AIOCQHTTP)
+
+        aiocqhttp_event = FakeEvent([], platform_name="aiocqhttp")
+        other_adapter_event = FakeEvent([], platform_name="qq_official")
+        self.assertTrue(platform_filter.filter(aiocqhttp_event, {}))
+        self.assertFalse(platform_filter.filter(other_adapter_event, {}))
+
+    async def test_auto_mention_searches_once_and_stops_before_reply_lookup(
+        self,
+    ) -> None:
+        timeline: list[tuple[str, object]] = []
+        service = SimpleNamespace(
+            get_available_strategies=lambda: ["saucenao", "ascii2d"],
+            resolve_strategy_names=lambda _names: ([], []),
+        )
+        plugin = self.make_plugin(service)
+        plugin.strategies = [object()]
+        reply_image = Image(file="https://image.example/reply.jpg")
+        event = FakeEvent(
+            timeline,
+            message_str="@member(42) /搜图 sauce,2d",
+            messages=self._reply_command_components("/搜图 sauce,2d"),
+            is_command=False,
+        )
+
+        async def resolve_reply(
+            _event: FakeEvent,
+            _reply: Reply,
+        ) -> Image:
+            timeline.append(("reply_lookup", None))
+            return reply_image
+
+        async def run_search(
+            *_args: object,
+            **_kwargs: object,
+        ) -> str:
+            timeline.append(("search", None))
+            return "搜索失败"
+
+        plugin._run_command_search = AsyncMock(side_effect=run_search)
+        get_image_from_reply = AsyncMock(side_effect=resolve_reply)
+        with patch(
+            "astrbot_plugin_imgexploration.core.image_sources.get_image_from_reply",
+            new=get_image_from_reply,
+        ):
+            yielded = [
+                result async for result in plugin.search_image_auto_mention_cmd(event)
+            ]
+
+        self.assertEqual(yielded, ["搜索失败"])
+        self.assertTrue(event.is_stopped())
+        self.assertEqual(
+            timeline,
+            [("stop", None), ("reply_lookup", None), ("search", None)],
+        )
+        get_image_from_reply.assert_awaited_once_with(event, event.get_messages()[0])
+        plugin._run_command_search.assert_awaited_once_with(
+            event,
+            reply_image,
+            ["sauce", "2d"],
+        )
+
+    async def test_auto_mention_reply_without_image_does_not_create_wait(self) -> None:
+        timeline: list[tuple[str, object]] = []
+        service = SimpleNamespace(
+            get_available_strategies=lambda: ["saucenao"],
+        )
+        plugin = self.make_plugin(service)
+        plugin.strategies = [object()]
+        event = FakeEvent(
+            timeline,
+            messages=self._reply_command_components(),
+            is_command=False,
+        )
+        plugin._run_command_search = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.core.image_sources.get_image_from_reply",
+                new=AsyncMock(return_value=None),
+            ),
+            patch.object(
+                plugin._image_wait,
+                "create",
+                wraps=plugin._image_wait.create,
+            ) as create_wait,
+        ):
+            yielded = [
+                result async for result in plugin.search_image_auto_mention_cmd(event)
+            ]
+
+        self.assertEqual(yielded, ["回复消息中未找到图片"])
+        self.assertTrue(event.is_stopped())
+        create_wait.assert_not_awaited()
+        plugin._run_command_search.assert_not_awaited()
+
+    async def test_auto_mention_handler_ignores_already_activated_commands(
+        self,
+    ) -> None:
+        timeline: list[tuple[str, object]] = []
+        plugin = self.make_plugin(SimpleNamespace())
+        plugin._run_command_search = AsyncMock(return_value=None)
+        event = FakeEvent(
+            timeline,
+            messages=self._reply_command_components(),
+            is_command=True,
+        )
+
+        yielded = [
+            result async for result in plugin.search_image_auto_mention_cmd(event)
+        ]
+
+        self.assertEqual(yielded, [])
+        self.assertFalse(event.is_stopped())
+        plugin._run_command_search.assert_not_awaited()
 
 
 class CommandSearchRunnerTests(PluginTestCase):

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from astrbot.api import llm_tool, logger
@@ -15,7 +16,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import Image, Reply
+from astrbot.core.message.components import At, Image, Plain, Reply
 
 from .core import image_sources, image_wait, result_sender
 from .core.constant import (
@@ -543,6 +544,50 @@ class ImgExplorationPlugin(Star):
     # Command Handlers
     # ==================================================================
 
+    @filter.platform_adapter_type(
+        filter.PlatformAdapterType.AIOCQHTTP,
+        priority=2,
+    )
+    async def search_image_auto_mention_cmd(self, event: AstrMessageEvent):
+        """兼容 QQ 回复他人消息时自动插入艾特的搜图命令。"""
+        if getattr(event, "is_at_or_wake_command", False):
+            return
+
+        messages = event.get_messages()
+        if not isinstance(messages, list) or len(messages) != 3:
+            return
+
+        reply, mention, plain = messages
+        if not isinstance(reply, Reply) or not isinstance(mention, At):
+            return
+        if not isinstance(plain, Plain):
+            return
+
+        reply_sender_id = str(getattr(reply, "sender_id", "") or "")
+        mention_qq = str(getattr(mention, "qq", "") or "")
+        if not reply_sender_id or reply_sender_id != mention_qq:
+            return
+
+        command_text = getattr(plain, "text", None)
+        if not isinstance(command_text, str):
+            return
+        match = re.fullmatch(r"/搜图(?:\s+(.+))?", command_text)
+        if match is None:
+            return
+
+        args_str = match.group(1)
+        if args_str is not None and not args_str.strip():
+            return
+        message_str = "搜图" if args_str is None else f"搜图 {args_str}"
+
+        event.stop_event()
+        results = self._command_search_results(event, message_str)
+        try:
+            async for result in results:
+                yield event.plain_result(result)
+        finally:
+            await results.aclose()
+
     @filter.command("搜图")
     async def search_image_cmd(self, event: AstrMessageEvent):
         """搜图指令 - 附带、回复或随后发送一张图片进行搜索
@@ -556,16 +601,29 @@ class ImgExplorationPlugin(Star):
 
         别名: sauce=saucenao, 2d=ascii2d
         """
+        results = self._command_search_results(event, event.message_str)
+        try:
+            async for result in results:
+                yield event.plain_result(result)
+        finally:
+            await results.aclose()
+
+    async def _command_search_results(
+        self,
+        event: AstrMessageEvent,
+        message_str: str,
+    ):
+        """生成搜图命令的用户可见结果。"""
         # 检查是否有可用策略
         if not self.strategies:
-            yield event.plain_result(
+            yield (
                 "没有可用的搜图 API，请检查配置。\n"
                 "需要在 WebUI 中配置至少一个搜图引擎的 API Key。"
             )
             return
 
         # 解析命令参数
-        message_str = event.message_str.strip()
+        message_str = message_str.strip()
         # 使用空格分割，移除命令本身，获取剩余参数
         parts = message_str.split(maxsplit=1)
         args_str = parts[1] if len(parts) > 1 else ""
@@ -581,7 +639,7 @@ class ImgExplorationPlugin(Star):
         if strategy_names:
             _, not_found = self.service.resolve_strategy_names(strategy_names)
             if not_found:
-                yield event.plain_result(
+                yield (
                     f"以下策略不可用: {', '.join(not_found)}\n"
                     f"当前可用策略: {', '.join(available_strategies)}"
                 )
@@ -605,21 +663,19 @@ class ImgExplorationPlugin(Star):
                     reply_msg,
                 )
                 if image_source is None:
-                    yield event.plain_result("回复消息中未找到图片")
+                    yield "回复消息中未找到图片"
                     return
 
         if image_source is None:
             wait_state = await self._image_wait.create(event, strategy_names)
             if wait_state is None:
-                yield event.plain_result("当前已进入搜索模式，请直接发送图片")
+                yield "当前已进入搜索模式，请直接发送图片"
                 return
             try:
-                yield event.plain_result(
-                    f"请在{self._image_wait.timeout_seconds}秒内发送图片。"
-                )
+                yield f"请在{self._image_wait.timeout_seconds}秒内发送图片。"
                 wait_result = await self._image_wait.wait(event, wait_state)
                 if wait_result is image_wait.ImageWaitOutcome.TIMED_OUT:
-                    yield event.plain_result("搜图等待已超时")
+                    yield "搜图等待已超时"
                     return
                 if wait_result is image_wait.ImageWaitOutcome.CANCELLED:
                     return
@@ -634,7 +690,7 @@ class ImgExplorationPlugin(Star):
             strategy_names,
         )
         if terminal_message is not None:
-            yield event.plain_result(terminal_message)
+            yield terminal_message
 
     async def _run_command_search(
         self,
