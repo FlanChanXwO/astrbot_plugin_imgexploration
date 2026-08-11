@@ -525,6 +525,62 @@ class ImageWaitPluginLifecycleTests(_ImageWaitPluginTestCase):
 
 
 class PluginTerminationTests(_ImageWaitPluginTestCase):
+    async def test_terminate_continues_cleanup_after_strategy_failure(self) -> None:
+        plugin = self.make_wait_plugin(clock=Mock(return_value=100.0))
+        state = await plugin._image_wait.create(FakeEvent([]), None)
+        assert state is not None
+        first_strategy = SimpleNamespace(
+            get_service_name=Mock(return_value="first"),
+            close=AsyncMock(side_effect=RuntimeError("first strategy failed")),
+        )
+        later_strategy = SimpleNamespace(
+            get_service_name=Mock(return_value="later"),
+            close=AsyncMock(),
+        )
+        plugin.strategies = [first_strategy, later_strategy]
+
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.main.close_aiohttp_session",
+                new=AsyncMock(),
+            ) as close_session,
+            self.assertRaisesRegex(RuntimeError, "first strategy failed"),
+        ):
+            await plugin.terminate()
+
+        self.assertIs(state.future.result(), ImageWaitOutcome.CANCELLED)
+        first_strategy.close.assert_awaited_once_with()
+        later_strategy.close.assert_awaited_once_with()
+        close_session.assert_awaited_once_with()
+
+    async def test_terminate_stops_cleanup_on_cancellation(self) -> None:
+        plugin = self.make_wait_plugin(clock=Mock(return_value=100.0))
+        state = await plugin._image_wait.create(FakeEvent([]), None)
+        assert state is not None
+        first_strategy = SimpleNamespace(
+            get_service_name=Mock(return_value="first"),
+            close=AsyncMock(side_effect=asyncio.CancelledError()),
+        )
+        later_strategy = SimpleNamespace(
+            get_service_name=Mock(return_value="later"),
+            close=AsyncMock(),
+        )
+        plugin.strategies = [first_strategy, later_strategy]
+
+        with (
+            patch(
+                "astrbot_plugin_imgexploration.main.close_aiohttp_session",
+                new=AsyncMock(),
+            ) as close_session,
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await plugin.terminate()
+
+        self.assertIs(state.future.result(), ImageWaitOutcome.CANCELLED)
+        first_strategy.close.assert_awaited_once_with()
+        later_strategy.close.assert_not_awaited()
+        close_session.assert_not_awaited()
+
     async def test_terminate_leaves_llm_tool_lifecycle_to_framework(self) -> None:
         plugin = self.make_wait_plugin(clock=Mock(return_value=100.0))
         state = await plugin._image_wait.create(FakeEvent([]), None)

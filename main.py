@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from astrbot.api import llm_tool, logger
@@ -260,12 +261,28 @@ class ImgExplorationPlugin(Star):
 
     async def terminate(self):
         """插件卸载时清理资源."""
-        await self._image_wait.close()
-        # 关闭所有策略的资源
+        cleanup_errors: list[Exception] = []
+
+        async def _attempt_close(
+            label: str,
+            close: Callable,
+        ) -> None:
+            try:
+                await close()
+            except Exception as exc:
+                cleanup_errors.append(exc)
+                logger.error(f"[ImgExploration] {label} 清理失败: {exc}")
+
+        await _attempt_close("等待协调器", self._image_wait.close)
         for strategy in self.strategies:
-            await strategy.close()
-        # 关闭全局 aiohttp session
-        await close_aiohttp_session()
+            await _attempt_close(
+                f"策略{strategy.get_service_name()}",
+                strategy.close,
+            )
+        await _attempt_close("共享 aiohttp session", close_aiohttp_session)
+
+        if cleanup_errors:
+            raise cleanup_errors[0]
 
     def _is_llm_tool_silent_mode(self) -> bool:
         """检查 LLM 工具是否为静默模式.
