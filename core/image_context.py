@@ -158,6 +158,11 @@ class ImageContextManager:
         Returns:
             会话标识
         """
+        # 优先使用unified_msg_origin
+        unified_msg_origin = getattr(event, "unified_msg_origin", None)
+        if unified_msg_origin is not None:
+            return str(unified_msg_origin)
+
         # 尝试获取会话 ID
         session_id = getattr(event, "session_id", None)
         if session_id:

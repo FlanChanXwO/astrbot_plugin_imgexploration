@@ -107,6 +107,84 @@ class ImageContextManagerTests(unittest.TestCase):
         e4 = SimpleNamespace(platform="discord")
         self.assertEqual(mgr._get_session_key(e4), "discord:unknown")
 
+    def test_session_key_prefers_unified_msg_origin(self) -> None:
+        mgr = ImageContextManager()
+        event = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="42",
+        )
+
+        self.assertEqual(mgr._get_session_key(event), "instance-a:group:42")
+
+    def test_session_context_isolated_by_platform_instance_origin(self) -> None:
+        mgr = ImageContextManager()
+        event_a = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="42",
+        )
+        event_b = SimpleNamespace(
+            unified_msg_origin="instance-b:group:42",
+            session_id="42",
+        )
+
+        mgr.add_image(event_a, "https://example.com/instance-a.jpg")
+
+        self.assertIsNone(mgr.get_recent_image(event_b))
+
+        mgr.add_image(event_b, "https://example.com/instance-b.jpg")
+        self.assertEqual(
+            mgr.get_recent_image(event_a), "https://example.com/instance-a.jpg"
+        )
+        self.assertEqual(
+            mgr.get_recent_image(event_b), "https://example.com/instance-b.jpg"
+        )
+
+    def test_session_context_isolated_by_message_type_origin(self) -> None:
+        mgr = ImageContextManager()
+        group_event = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="42",
+        )
+        private_event = SimpleNamespace(
+            unified_msg_origin="instance-a:private:42",
+            session_id="42",
+        )
+
+        mgr.add_image(group_event, "https://example.com/group.jpg")
+
+        self.assertIsNone(mgr.get_recent_image(private_event))
+
+    def test_same_origin_shares_context_across_senders(self) -> None:
+        mgr = ImageContextManager()
+        event_a = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="42",
+            sender_id="sender-a",
+        )
+        event_b = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="42",
+            sender_id="sender-b",
+        )
+
+        mgr.add_image(event_a, "https://example.com/first.jpg")
+        mgr.add_image(event_b, "https://example.com/second.jpg")
+
+        self.assertEqual(
+            mgr.get_all_images(event_a),
+            [
+                "https://example.com/first.jpg",
+                "https://example.com/second.jpg",
+            ],
+        )
+        self.assertEqual(
+            mgr.get_all_images(event_b),
+            [
+                "https://example.com/first.jpg",
+                "https://example.com/second.jpg",
+            ],
+        )
+
     def test_session_isolation_and_lru_eviction(self) -> None:
         mgr = ImageContextManager(
             isolation_mode="session",
@@ -134,12 +212,30 @@ class ImageContextManagerTests(unittest.TestCase):
 
     def test_global_isolation_mode(self) -> None:
         mgr = ImageContextManager(isolation_mode="global")
-        event1 = SimpleNamespace(session_id="session-1")
-        event2 = SimpleNamespace(session_id="session-2")
+        event1 = SimpleNamespace(
+            unified_msg_origin="instance-a:group:42",
+            session_id="session-1",
+        )
+        event2 = SimpleNamespace(
+            unified_msg_origin="instance-b:private:42",
+            session_id="session-2",
+        )
 
         mgr.add_image(event1, "https://example.com/shared.jpg")
         self.assertEqual(mgr.get_recent_image(event2), "https://example.com/shared.jpg")
         self.assertEqual(len(mgr.get_all_images(event2)), 1)
+
+        class BrokenOriginEvent:
+            session_id = "session-3"
+
+            @property
+            def unified_msg_origin(self) -> str:
+                raise AssertionError("global mode must not resolve origin")
+
+        self.assertEqual(
+            mgr.get_recent_image(BrokenOriginEvent()),
+            "https://example.com/shared.jpg",
+        )
 
     def test_image_retrieval_methods(self) -> None:
         mgr = ImageContextManager()
