@@ -308,17 +308,18 @@ class ImgExplorationPlugin(Star):
         message_obj = getattr(event, "message_obj", None)
         message_id = str(getattr(message_obj, "message_id", "") or "")
         sender_id = str(event.get_sender_id() or "")
-        http_sources, _ = image_sources.partition_image_sources(
+        http_candidates, _ = image_sources.partition_image_sources(
             *images,
-            *image_sources.get_raw_image_urls(event),
+            *image_sources.get_raw_image_sources(event),
         )
 
-        for url in http_sources:
+        for candidate in http_candidates:
             image_ctx.add_image(
                 event,
-                url,
+                candidate.url,
                 message_id=message_id,
                 sender_id=sender_id,
+                is_sticker=candidate.is_sticker,
             )
 
         is_search_command = self._is_search_command_event(event)
@@ -366,11 +367,12 @@ class ImgExplorationPlugin(Star):
         Call this tool only when the user explicitly asks to search for an image,
         find its source, or perform a reverse image search. Do not call it merely
         because an image is attached, quoted, replied to, described, identified, or
-        discussed. When explicit search intent exists, call this tool before
+        discussed. Sticker images are ignored by default; search one only when the
+        user explicitly asks to search that sticker. When explicit search intent exists, call this tool before
         search_image.
 
         Returns:
-            JSON result containing image_id, image_index, and optional metadata for selection.
+            JSON result containing image_id, image_index, is_sticker, and optional metadata for selection.
         """
         image_ctx = get_image_context_manager()
         info = image_ctx.get_image_context_info(event)
@@ -390,8 +392,10 @@ class ImgExplorationPlugin(Star):
         find its source, or perform a reverse image search. Do not call it merely
         because an image is attached, quoted, replied to, described, identified, or
         discussed. Do not use it for ordinary image conversation, visual description,
-        interpretation, or identification. When explicit search intent exists, call
-        get_session_images first, then prefer image_id to select the target image.
+        interpretation, or identification. Ignore sticker images by default and
+        search a sticker only when the user explicitly asks for that sticker. When
+        explicit search intent exists, call get_session_images first, then prefer
+        image_id to select the target image.
 
         Args:
             image_index(int): Fallback image index. -1 = most recent image, 1 = first/oldest image.
@@ -712,9 +716,9 @@ class ImgExplorationPlugin(Star):
 
         http_sources, other_sources = image_sources.partition_image_sources(
             image_source,
-            *image_sources.get_raw_image_urls(event),
+            *image_sources.get_raw_image_sources(event),
         )
-        image_url = http_sources[0] if http_sources else None
+        image_url = http_sources[0].url if http_sources else None
         if image_url is None:
             for source in other_sources:
                 image_url = await get_http_image_url(source)

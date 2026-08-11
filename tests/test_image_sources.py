@@ -10,7 +10,7 @@ from astrbot.core.message.components import Image, Reply
 from astrbot_plugin_imgexploration.core.image_sources import (
     as_http_image_url,
     get_image_from_reply,
-    get_raw_image_urls,
+    get_raw_image_sources,
     partition_image_sources,
 )
 
@@ -45,7 +45,9 @@ class PartitionImageSourcesTests(unittest.TestCase):
             "",
         )
 
-        self.assertEqual(http_sources, [file_url, raw_url, component_url])
+        self.assertEqual(
+            [source.url for source in http_sources], [file_url, raw_url, component_url]
+        )
         self.assertEqual(other_sources, [local_url])
 
 
@@ -60,7 +62,7 @@ class RawImageExtractionTests(unittest.TestCase):
                 event = SimpleNamespace(
                     message_obj=SimpleNamespace(raw_message=raw_message)
                 )
-                self.assertEqual(get_raw_image_urls(event), [])
+                self.assertEqual(get_raw_image_sources(event), [])
 
         event = SimpleNamespace(
             message_obj=SimpleNamespace(
@@ -78,9 +80,41 @@ class RawImageExtractionTests(unittest.TestCase):
                 )
             )
         )
-        self.assertEqual(get_raw_image_urls(event), [])
+        self.assertEqual(get_raw_image_sources(event), [])
 
-    def test_extracts_http_urls_from_mapping_and_object_shapes(self) -> None:
+    def test_extracts_verified_image_sticker_marker(self) -> None:
+        url = "https://image.example/sticker.jpg"
+        event = SimpleNamespace(
+            message_obj=SimpleNamespace(
+                raw_message={
+                    "message": [{"type": "image", "data": {"url": url, "sub_type": 1}}]
+                }
+            )
+        )
+        sources = get_raw_image_sources(event)
+        self.assertEqual(sources[0].url, url)
+        self.assertTrue(sources[0].is_sticker)
+
+    def test_unknown_or_malformed_sticker_metadata_falls_back(self) -> None:
+        for sub_type in (None, "1", True, 0, 2):
+            with self.subTest(sub_type=sub_type):
+                event = SimpleNamespace(
+                    message_obj=SimpleNamespace(
+                        raw_message={
+                            "message": [
+                                {
+                                    "type": "image",
+                                    "data": {
+                                        "url": "https://image.example/ordinary.jpg",
+                                        "sub_type": sub_type,
+                                    },
+                                }
+                            ]
+                        }
+                    )
+                )
+                self.assertFalse(get_raw_image_sources(event)[0].is_sticker)
+
         first_url = "https://image.example/first.jpg"
         second_url = "http://image.example/second.jpg"
 
@@ -102,7 +136,10 @@ class RawImageExtractionTests(unittest.TestCase):
                 event = SimpleNamespace(
                     message_obj=SimpleNamespace(raw_message=raw_message)
                 )
-                self.assertEqual(get_raw_image_urls(event), [first_url, second_url])
+                self.assertEqual(
+                    [source.url for source in get_raw_image_sources(event)],
+                    [first_url, second_url],
+                )
 
 
 class ReplyImageTests(unittest.IsolatedAsyncioTestCase):

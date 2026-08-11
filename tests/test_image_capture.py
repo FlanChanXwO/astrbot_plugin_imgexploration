@@ -44,6 +44,7 @@ class ImageCaptureTests(PluginTestCase):
             raw_url,
             message_id="message-1",
             sender_id="user-1",
+            is_sticker=False,
         )
 
     async def test_uses_raw_http_without_matching_component(self) -> None:
@@ -81,6 +82,7 @@ class ImageCaptureTests(PluginTestCase):
             raw_url,
             message_id="message-1",
             sender_id="user-1",
+            is_sticker=False,
         )
 
     async def test_checks_component_url_and_file_independently(self) -> None:
@@ -110,6 +112,7 @@ class ImageCaptureTests(PluginTestCase):
             file_url,
             message_id="message-1",
             sender_id="user-1",
+            is_sticker=False,
         )
 
     async def test_preserves_candidate_order_and_deduplicates(self) -> None:
@@ -164,18 +167,21 @@ class ImageCaptureTests(PluginTestCase):
                     component_url,
                     message_id="message-1",
                     sender_id="user-1",
+                    is_sticker=False,
                 ),
                 call(
                     event,
                     component_file,
                     message_id="message-1",
                     sender_id="user-1",
+                    is_sticker=False,
                 ),
                 call(
                     event,
                     raw_url,
                     message_id="message-1",
                     sender_id="user-1",
+                    is_sticker=False,
                 ),
             ],
         )

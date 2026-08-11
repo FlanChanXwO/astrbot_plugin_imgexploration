@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
 from astrbot.core.message.components import Image, Reply
 
 from .utils import get_bot_api
+
+
+@dataclass(frozen=True)
+class ImageSource:
+    """图片 URL 及其可选的来源元数据。"""
+
+    url: str
+    is_sticker: bool = False
 
 
 def as_http_image_url(value: object) -> str | None:
@@ -20,8 +29,16 @@ def as_http_image_url(value: object) -> str | None:
     return value
 
 
-def get_raw_image_urls(event: AstrMessageEvent) -> list[str]:
-    """从结构化原始事件提取图片 URL"""
+def _is_image_sticker(data: Mapping[str, object]) -> bool:
+    """仅识别 OneBot image segment 的明确图片表情标记。"""
+    sub_type = data.get("sub_type")
+    return (
+        isinstance(sub_type, int) and not isinstance(sub_type, bool) and sub_type == 1
+    )
+
+
+def get_raw_image_sources(event: AstrMessageEvent) -> list[ImageSource]:
+    """从结构化原始事件提取图片 URL 及明确的表情标记。"""
     message_obj = getattr(event, "message_obj", None)
     raw_message = getattr(message_obj, "raw_message", None)
     if isinstance(raw_message, Mapping):
@@ -31,7 +48,7 @@ def get_raw_image_urls(event: AstrMessageEvent) -> list[str]:
     if not isinstance(segments, (list, tuple)):
         return []
 
-    urls: list[str] = []
+    sources: list[ImageSource] = []
     for segment in segments:
         if not isinstance(segment, Mapping) or segment.get("type") != "image":
             continue
@@ -40,33 +57,45 @@ def get_raw_image_urls(event: AstrMessageEvent) -> list[str]:
             continue
         url = as_http_image_url(data.get("url"))
         if url is not None:
-            urls.append(url)
-    return urls
+            sources.append(ImageSource(url, _is_image_sticker(data)))
+    return sources
 
 
 def partition_image_sources(
-    *image_sources: str | Image | None,
-) -> tuple[list[str], list[str]]:
-    """展开并去重图片来源，分别返回 HTTP(S) 与其他候选"""
-    http_sources: list[str] = []
+    *image_sources: str | Image | ImageSource | None,
+) -> tuple[list[ImageSource], list[str]]:
+    """展开并去重图片来源，同时保留图片表情元数据。"""
+    http_sources: list[ImageSource] = []
     other_sources: list[str] = []
-    seen: set[str] = set()
+    seen: dict[str, int] = {}
 
     for image_source in image_sources:
-        if isinstance(image_source, Image):
-            values = (image_source.url, image_source.file)
-        elif isinstance(image_source, str):
+        if isinstance(image_source, ImageSource):
             values = (image_source,)
+        elif isinstance(image_source, Image):
+            values = tuple(
+                ImageSource(value)
+                for value in (image_source.url, image_source.file)
+                if isinstance(value, str)
+            )
+        elif isinstance(image_source, str):
+            values = (ImageSource(image_source),)
         else:
             continue
 
-        for value in values:
-            if not isinstance(value, str) or not value or value in seen:
+        for source in values:
+            value = source.url
+            if not value or value in seen:
+                if value in seen and source.is_sticker:
+                    http_index = seen[value]
+                    if http_index >= 0:
+                        http_sources[http_index] = ImageSource(value, True)
                 continue
-            seen.add(value)
             if as_http_image_url(value) is not None:
-                http_sources.append(value)
+                seen[value] = len(http_sources)
+                http_sources.append(source)
             else:
+                seen[value] = -len(other_sources) - 1
                 other_sources.append(value)
 
     return http_sources, other_sources

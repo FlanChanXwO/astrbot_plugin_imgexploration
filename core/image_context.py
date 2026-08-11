@@ -26,6 +26,7 @@ class ImageInfo:
     message_id: str | None = None
     sender_id: str | None = None
     description: str | None = None  # 可选的图片描述
+    is_sticker: bool = False
 
 
 @dataclass
@@ -46,6 +47,7 @@ class SessionImages:
         url: str,
         message_id: str | None = None,
         sender_id: str | None = None,
+        is_sticker: bool = False,
     ) -> ImageInfo | None:
         """添加图片到会话。"""
         if not url or not url.startswith(("http://", "https://")):
@@ -65,6 +67,7 @@ class SessionImages:
             url=url,
             message_id=message_id,
             sender_id=sender_id,
+            is_sticker=is_sticker,
         )
         self.images[info.image_id] = info
         self.url_index[url] = info.image_id
@@ -222,6 +225,7 @@ class ImageContextManager:
         url: str,
         message_id: str | None = None,
         sender_id: str | None = None,
+        is_sticker: bool = False,
     ) -> None:
         """添加图片到上下文。
 
@@ -233,7 +237,7 @@ class ImageContextManager:
         """
         with self._lock:
             session = self._get_session(event)
-            info = session.add_image(url, message_id, sender_id)
+            info = session.add_image(url, message_id, sender_id, is_sticker)
             if info:
                 logger.debug(
                     f"[ImageContext] 捕获图片到上下文: "
@@ -339,6 +343,7 @@ class ImageContextManager:
                 "age_seconds": int((now - info.timestamp).total_seconds()),
                 "message_id": info.message_id,
                 "sender_id": info.sender_id,
+                "is_sticker": info.is_sticker,
             }
             if self.include_url_in_context:
                 item["url"] = info.url
