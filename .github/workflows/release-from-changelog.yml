@@ -103,7 +103,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.target_sha || github.sha }}
@@ -172,7 +172,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.target_sha || github.sha }}
@@ -306,8 +306,8 @@ jobs:
           tag_exists="false"
           release_exists="false"
 
-          tag_target="$(git rev-parse "refs/tags/${tag}^{commit}" 2>/dev/null || true)"
-          if [ -n "$tag_target" ]; then
+          tag_target=""
+          if tag_target="$(git rev-parse --verify --quiet "refs/tags/${tag}^{commit}")"; then
             tag_exists="true"
           fi
 
